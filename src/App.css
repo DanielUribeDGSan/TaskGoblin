@@ -1,0 +1,258 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #333333;
+  background-color: transparent;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* LIGHT THEME VARIABLES */
+  --bg-primary: #ffffff;
+  --bg-gradient: linear-gradient(180deg, #ffffff 0%, #e0e0e5 100%);
+  --bg-secondary: #f4f4f7;
+  --border-color: #eaeaea;
+  --text-primary: #1c1c1e;
+  --text-secondary: #8e8e93;
+  --accent-color: #6c5ce7;
+  --list-hover: #f1f2f6;
+  --list-active: #f1f2f6;
+  --shadow-color: rgba(0, 0, 0, 0.08);
+}
+
+body.dark {
+  /* DARK THEME VARIABLES */
+  --bg-primary: #212124;
+  --bg-gradient: linear-gradient(180deg, #323236 0%, #09090a 100%);
+  --bg-secondary: #2c2c2e;
+  --border-color: #3f3f46;
+  --text-primary: #ffffff;
+  --text-secondary: #a1a1aa;
+  --accent-color: #8c7ae6;
+  --list-hover: #333338;
+  --list-active: #3a3a3c;
+  --shadow-color: rgba(0, 0, 0, 0.3);
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  background-color: transparent !important;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+body {
+  display: flex;
+  place-items: center;
+  justify-content: center;
+}
+
+/* Base App Wrapper */
+.app-wrapper {
+  background: var(--bg-gradient);
+  width: 360px;
+  height: 740px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  border-radius: 24px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 12px 40px var(--shadow-color);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+  box-sizing: border-box;
+}
+
+/* Scrollbar Customization */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+/* Top Header */
+.top-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  padding-top: 32px;
+}
+
+.app-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background-color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  object-fit: contain;
+}
+
+.theme-toggle-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: all 0.2s;
+}
+
+.theme-toggle-btn:hover {
+  background: var(--list-hover);
+}
+
+/* Content Area */
+.content-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 0 16px;
+}
+
+.section-label {
+  padding: 16px 8px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+}
+
+/* List Items */
+.list-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  margin-bottom: 2px;
+  gap: 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border-radius: 10px;
+  background: transparent;
+}
+
+.list-item.active {
+  background: var(--list-active);
+}
+
+.list-item:hover:not(.active) {
+  background: var(--list-hover);
+}
+
+/* Toggle Switch Styles inside List Items */
+.toggle-switch {
+  width: 32px;
+  height: 18px;
+  background-color: var(--border-color);
+  border-radius: 18px;
+  position: relative;
+  transition: background-color 0.3s;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+  margin-left: auto;
+}
+
+.toggle-switch.active {
+  background-color: var(--accent-color);
+}
+
+.toggle-knob {
+  width: 14px;
+  height: 14px;
+  background-color: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.toggle-switch.active .toggle-knob {
+  transform: translateX(14px);
+}
+
+/* Inputs and Forms for WhatsApp Scheduler */
+input, textarea {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  background: var(--bg-secondary) !important;
+  border: none;
+  color: var(--text-primary) !important;
+  padding: 10px;
+  border-radius: 8px;
+  outline: none;
+}
+
+input:focus, textarea:focus {
+  border-color: var(--accent-color) !important;
+}
+
+.no-focus-input:focus {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  background: transparent !important;
+}
+
+::-webkit-calendar-picker-indicator {
+  filter: invert(0.5);
+  cursor: pointer;
+}
+
+body.dark ::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+.wa-form-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 8px;
+}
+
+.wa-form-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.wa-submit-btn {
+  width: 100%;
+  background: var(--accent-color);
+  color: #fff;
+  border: none;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: opacity 0.2s;
+}
+
+.wa-submit-btn:hover {
+  opacity: 0.9;
+}
