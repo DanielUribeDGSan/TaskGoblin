@@ -235,6 +235,8 @@ body {
   display: flex;
   flex-direction: column;
   padding: 0 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .section-label {
@@ -496,6 +498,12 @@ body.dark ::-webkit-calendar-picker-indicator {
   display: flex;
   align-items: center;
   pointer-events: none;
+}
+
+.toast-notification.visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* 3D Puppy Visuals */

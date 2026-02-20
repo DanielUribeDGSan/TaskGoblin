@@ -130,25 +130,38 @@ function App() {
   const [isPetMode, setIsPetMode] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  const togglePetMode = async () => {
-    const newMode = !isPetMode;
+  const checkAccessibility = async () => {
     try {
-      await invoke("toggle_pet_mode", { active: newMode });
-      setIsPetMode(newMode);
-      if (newMode) {
-        setIsSidebarOpen(false); // Auto-hide on start
-      } else {
-        setIsSidebarOpen(true); // Restore on stop
-      }
-      showToast(newMode ? "Pet activated! 🐶" : "Pet is resting... 🏠");
+      const isEnabled = await invoke("check_accessibility");
+      return isEnabled;
     } catch (err) {
-      showToast("Error toggling pet mode: " + err);
+      return false;
     }
   };
 
-  const showToast = (message: string) => {
-    setToast({ message, visible: true });
-    setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
+  const requestAccessibility = async () => {
+    try {
+      await invoke("request_accessibility");
+    } catch (err) {
+      showToast("Error requesting permissions: " + err);
+    }
+  };
+
+  const handleToggleMouse = async () => {
+    const isEnabled = await checkAccessibility();
+    if (!isEnabled) {
+      showToast("⚠️ Accessibility required for mouse mover");
+      await requestAccessibility();
+      // Also open settings as fallback
+      setTimeout(() => invoke("open_accessibility_settings"), 2000);
+      return;
+    }
+    try {
+      const newState: boolean = await invoke("toggle_mouse");
+      setIsMouseMoving(newState);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   // Sync dark mode class
@@ -188,19 +201,32 @@ function App() {
     };
 
     fetchContacts();
+    checkAccessibility(); // Check for mouse movement permissions on start
 
     return () => {
       globalThis.removeEventListener("contextmenu", handleContextMenu);
     };
   }, []);
 
-  const handleToggleMouse = async () => {
+  const togglePetMode = async () => {
+    const newMode = !isPetMode;
     try {
-      const newState: boolean = await invoke("toggle_mouse");
-      setIsMouseMoving(newState);
+      await invoke("toggle_pet_mode", { active: newMode });
+      setIsPetMode(newMode);
+      if (newMode) {
+        setIsSidebarOpen(false); // Auto-hide on start
+      } else {
+        setIsSidebarOpen(true); // Restore on stop
+      }
+      showToast(newMode ? "Pet activated! 🐶" : "Pet is resting... 🏠");
     } catch (err) {
-      console.error(err);
+      showToast("Error toggling pet mode: " + err);
     }
+  };
+
+  const showToast = (message: string) => {
+    setToast({ message, visible: true });
+    setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
   };
 
   const sanitizePhone = (phone: string, code: string) => {
@@ -301,6 +327,7 @@ function App() {
           >
             <img src="/icon/TaskGoblin.png" alt="TaskGoblin" className="app-logo" />
             <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>TaskGoblin</h1>
+            <span style={{ fontSize: '10px', color: 'var(--text-secondary)', marginBottom: '-9px', marginLeft: '-4px' }}>By Daniel Uribe</span>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             {isPetMode && (
@@ -464,6 +491,7 @@ function App() {
                 placeholder="Type your message here..."
                 style={{ minHeight: '80px', resize: 'vertical' }}
               />
+
 
               <label className="wa-form-label" style={{ marginTop: '8px' }}>Time (HH:MM)</label>
               <input

@@ -165,6 +165,52 @@ fn open_contact_settings() -> Result<(), String> {
 }
 
 #[tauri::command]
+fn open_accessibility_settings() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        let _ = Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+            .spawn();
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Not supported on this OS".to_string())
+    }
+}
+
+#[tauri::command]
+fn check_accessibility() -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    {
+        extern "C" {
+            fn AXIsProcessTrusted() -> bool;
+        }
+        unsafe { Ok(AXIsProcessTrusted()) }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(true)
+    }
+}
+
+#[tauri::command]
+fn request_accessibility() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
+        // Moving mouse 1 pixel to trigger the permission dialog
+        let _ = enigo.move_mouse(0, 0, enigo::Coordinate::Rel);
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(())
+    }
+}
+
+#[tauri::command]
 fn set_ignore_cursor_events(window: tauri::Window, ignore: bool) -> Result<(), String> {
     let _ = window.set_ignore_cursor_events(ignore);
     Ok(())
@@ -210,6 +256,9 @@ pub fn run() {
             schedule_whatsapp, 
             get_contacts,
             open_contact_settings,
+            open_accessibility_settings,
+            check_accessibility,
+            request_accessibility,
             toggle_pet_mode,
             set_ignore_cursor_events
         ])
