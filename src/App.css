@@ -31,6 +31,7 @@ body.dark {
   --text-primary: #ffffff;
   --text-secondary: #a1a1aa;
   --accent-color: #8c7ae6;
+  --accent-color-rgb: 140, 122, 230;
   --list-hover: #333338;
   --list-active: #3a3a3c;
   --shadow-color: rgba(0, 0, 0, 0.3);
@@ -361,6 +362,34 @@ body.dark ::-webkit-calendar-picker-indicator {
   color: var(--accent-color);
   display: flex;
   align-items: center;
+}
+
+/* Toast Notification */
+.toast-notification {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: rgba(var(--accent-color-rgb), 0.2);
+  border: 1px solid rgba(var(--accent-color-rgb), 0.4);
+  backdrop-filter: blur(12px);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  z-index: 9999;
+  transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  opacity: 0;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.toast-notification.visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
 }
 
 /* Scrollbar for picker */

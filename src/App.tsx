@@ -121,6 +121,12 @@ function App() {
   const [countryCode, setCountryCode] = useState("+52"); // Default México
   const [waMsg, setWaMsg] = useState("");
   const [waTime, setWaTime] = useState("");
+  const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: "", visible: false });
+
+  const showToast = (message: string) => {
+    setToast({ message, visible: true });
+    setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
+  };
 
   // Sync dark mode class
   useEffect(() => {
@@ -176,7 +182,7 @@ function App() {
 
   const sanitizePhone = (phone: string, code: string) => {
     // Remove all non-numeric characters except +
-    const cleaned = phone.replaceAll(/[^\d+]/g, "");
+    const cleaned = phone.replace(/[^\d+]/g, "");
 
     // If it starts with +, return as is
     if (cleaned.startsWith("+")) return cleaned;
@@ -223,15 +229,18 @@ function App() {
         message: waMsg,
         delaySecs: delaySecs
       }).then(() => {
-        alert(`Message scheduled for ${waTime}`);
+        showToast(`Message scheduled for ${waTime} 🚀`);
         setWaPhone("");
         setWaMsg("");
         setWaTime("");
         setActiveTab("Main");
-      }).catch(alert);
+      }).catch(err => {
+        console.error(err);
+        showToast("Error scheduling: " + err);
+      });
     } catch (err) {
       console.error(err);
-      alert("Error scheduling message: " + err);
+      showToast("Error scheduling message: " + err);
     }
   };
 
@@ -298,7 +307,7 @@ function App() {
             <ContactPicker
               contacts={contacts}
               onSelect={(c) => {
-                const cleaned = c.phone.replaceAll(/[^\d+]/g, "");
+                const cleaned = c.phone.replace(/[^\d+]/g, "");
                 setWaPhone(cleaned);
               }}
               currentPhone={waPhone}
@@ -378,6 +387,13 @@ function App() {
           </div>
         )}
       </div>
+
+      {toast.visible && (
+        <div className={`toast-notification ${toast.visible ? 'visible' : ''}`}>
+          <span style={{ marginRight: '8px' }}>✨</span>
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }
