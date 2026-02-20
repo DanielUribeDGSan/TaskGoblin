@@ -11,7 +11,7 @@
 
   /* LIGHT THEME VARIABLES */
   --bg-primary: #ffffff;
-  --bg-gradient: linear-gradient(180deg, #ffffff 0%, #e0e0e5 100%);
+  --bg-gradient: linear-gradient(180deg, #ffffff 0%, #ffffff 60%, #f9ecd2 90%);
   --bg-secondary: #f4f4f7;
   --border-color: #eaeaea;
   --text-primary: #1c1c1e;
@@ -25,7 +25,7 @@
 body.dark {
   /* DARK THEME VARIABLES */
   --bg-primary: #212124;
-  --bg-gradient: linear-gradient(180deg, #323236 0%, #09090a 100%);
+  --bg-gradient: linear-gradient(180deg, #27272a 60%, #3a2e15 100%);
   --bg-secondary: #2c2c2e;
   --border-color: #3f3f46;
   --text-primary: #ffffff;
