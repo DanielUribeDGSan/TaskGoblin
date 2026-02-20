@@ -55,10 +55,114 @@ async fn schedule_whatsapp(phone: String, message: String, delay_secs: u64) -> R
     Ok(())
 }
 
+#[derive(serde::Serialize)]
+struct Contact {
+    name: String,
+    phone: String,
+}
+
+#[tauri::command]
+async fn get_contacts() -> Result<Vec<Contact>, String> {
+    println!("Fetching contacts (async + optimized bulk)...");
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        
+        // This is a more compatible bulk fetch. We get names and phones separately 
+        // to avoid the -1728 error that occurs when mixing them in a filter.
+        let script = r#"
+            tell application "Contacts"
+                try
+                    set allNames to name of every person
+                    set allPhones to value of phones of every person
+                    
+                    set _output to ""
+                    repeat with i from 1 to count of allNames
+                        set _n to item i of allNames
+                        set _ps to item i of allPhones
+                        repeat with _p in _ps
+                            set _output to _output & _n & "|" & _p & "\n"
+                        end repeat
+                    end repeat
+                    return _output
+                on error err
+                    return "ERROR|" & err
+                end try
+            end tell
+        "#;
+
+        let res = tauri::async_runtime::spawn_blocking(move || {
+            Command::new("osascript")
+                .arg("-e")
+                .arg(script)
+                .output()
+        }).await.map_err(|e| e.to_string())?;
+
+        match res {
+            Ok(out) => {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                
+                if stdout.starts_with("ERROR|") {
+                    return Err(stdout.replace("ERROR|", ""));
+                }
+
+                let contacts: Vec<Contact> = stdout
+                    .lines()
+                    .filter_map(|line| {
+                        let parts: Vec<&str> = line.split('|').collect();
+                        if parts.len() == 2 {
+                            let name = parts[0].trim().to_string();
+                            let phone = parts[1].trim().to_string();
+                            if name.is_empty() || name == "missing value" || phone.is_empty() {
+                                None
+                            } else {
+                                Some(Contact { name, phone })
+                            }
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                println!("Fetched {} contacts", contacts.len());
+                return Ok(contacts);
+            }
+            Err(e) => {
+                return Err(format!("Command execution failed: {}", e));
+            }
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(Vec::new())
+    }
+}
+
+#[tauri::command]
+fn open_contact_settings() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        let _ = Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Contacts")
+            .spawn();
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Not supported on this OS".to_string())
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![is_mouse_moving, toggle_mouse, schedule_whatsapp])
+        .invoke_handler(tauri::generate_handler![
+            is_mouse_moving, 
+            toggle_mouse, 
+            schedule_whatsapp, 
+            get_contacts,
+            open_contact_settings
+        ])
         .setup(|app| {
             app.manage(AppState {
                 mouse_moving: Mutex::new(false),

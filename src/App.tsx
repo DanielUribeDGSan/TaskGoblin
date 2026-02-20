@@ -19,10 +19,102 @@ const MsgIcon = () => (
   <img src="/icon/chat.gif" alt="Move Mouse" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
 );
 
+interface Contact {
+  name: string;
+  phone: string;
+}
+
+const ContactPicker = ({ contacts, onSelect, currentPhone, onRefresh }: { contacts: Contact[], onSelect: (c: Contact) => void, currentPhone: string, onRefresh: () => void }) => {
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const filtered = contacts.filter(c =>
+    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.phone.includes(searchTerm)
+  ).sort((a, b) => a.name.localeCompare(b.name));
+
+  const groups = filtered.reduce((acc, contact) => {
+    const firstLetter = contact.name.charAt(0).toUpperCase();
+    if (!acc[firstLetter]) acc[firstLetter] = [];
+    acc[firstLetter].push(contact);
+    return acc;
+  }, {} as Record<string, Contact[]>);
+
+  const getInitials = (name: string) => {
+    return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+  };
+
+  return (
+    <div className="contact-picker-wrapper">
+      <input
+        type="text"
+        className="contact-search-input"
+        placeholder="Filter contacts..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+      />
+
+      {Object.keys(groups).sort().map(letter => (
+        <div key={letter}>
+          <div className="contact-group-header">{letter}</div>
+          {groups[letter].map((contact, idx) => (
+            <div
+              key={`${contact.name}-${idx}`}
+              className={`contact-item ${contact.phone === currentPhone ? 'selected' : ''}`}
+              onClick={() => onSelect(contact)}
+            >
+              <div className="contact-avatar">{getInitials(contact.name)}</div>
+              <div className="contact-info">
+                <span className="contact-name">{contact.name}</span>
+                <span className="contact-phone">{contact.phone}</span>
+              </div>
+              {contact.phone === currentPhone && (
+                <div className="contact-check">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ))}
+
+      {filtered.length === 0 && (
+        <div style={{ padding: '24px', textAlign: 'center' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '16px' }}>
+            {contacts.length === 0
+              ? "No contacts found or permissions missing."
+              : "No matches found for your search."}
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'center' }}>
+            <button
+              onClick={onRefresh}
+              className="wa-submit-btn"
+              style={{ width: 'auto', padding: '8px 16px', background: 'rgba(255,255,255,0.05)', fontSize: '12px' }}
+            >
+              🔄 Retry Sync
+            </button>
+            {contacts.length === 0 && (
+              <button
+                onClick={() => invoke("open_contact_settings")}
+                className="wa-submit-btn"
+                style={{ width: 'auto', padding: '8px 16px', fontSize: '12px' }}
+              >
+                🔐 Grant Permissions
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 function App() {
   const [activeTab, setActiveTab] = useState("Main");
   const [isMouseMoving, setIsMouseMoving] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
+  const [contactError, setContactError] = useState<string | null>(null);
 
   // WhatsApp scheduling state
   const [waPhone, setWaPhone] = useState("");
@@ -48,10 +140,27 @@ function App() {
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
     };
-    window.addEventListener("contextmenu", handleContextMenu);
+    globalThis.addEventListener("contextmenu", handleContextMenu);
+
+    // Fetch contacts
+    const fetchContacts = async () => {
+      setIsLoadingContacts(true);
+      setContactError(null);
+      try {
+        const data = await invoke("get_contacts");
+        setContacts(data as Contact[]);
+      } catch (err) {
+        console.error(err);
+        setContactError(err as string);
+      } finally {
+        setIsLoadingContacts(false);
+      }
+    };
+
+    fetchContacts();
 
     return () => {
-      window.removeEventListener("contextmenu", handleContextMenu);
+      globalThis.removeEventListener("contextmenu", handleContextMenu);
     };
   }, []);
 
@@ -154,16 +263,50 @@ function App() {
         {activeTab === "WhatsApp" && (
           <div className="wa-form-container">
             <div className="list-item" onClick={() => setActiveTab("Main")} style={{ marginBottom: '16px', background: 'var(--border-color)', fontWeight: 600 }}>
-              <span style={{ fontSize: '18px', marginRight: '8px' }}>←</span> Back
+              <span style={{ fontSize: '18px', marginRight: '8px', marginBottom: '8px' }}>←</span> Back
             </div>
 
-            <label className="wa-form-label">Phone Number</label>
+            <ContactPicker
+              contacts={contacts}
+              onSelect={(c) => setWaPhone(c.phone)}
+              currentPhone={waPhone}
+              onRefresh={async () => {
+                setIsLoadingContacts(true);
+                setContactError(null);
+                try {
+                  const data = await invoke("get_contacts");
+                  setContacts(data as Contact[]);
+                } catch (err) {
+                  console.error(err);
+                  setContactError(err as string);
+                } finally {
+                  setIsLoadingContacts(false);
+                }
+              }}
+            />
+            {isLoadingContacts && (
+              <div style={{ textAlign: 'center', padding: '10px', fontSize: '12px', color: 'var(--accent-color)' }}>
+                ⌛ Fetching your contacts...
+              </div>
+            )}
+
+            <label className="wa-form-label" style={{ marginTop: '18px' }}>Contact / Phone Number</label>
             <input
               type="text"
               value={waPhone}
               onChange={e => setWaPhone(e.target.value)}
               placeholder="+1234567890"
             />
+
+
+
+
+
+            {contactError && (
+              <div style={{ textAlign: 'center', padding: '10px', fontSize: '12px', color: '#ff5555' }}>
+                ❌ Error: {contactError}
+              </div>
+            )}
 
             <label className="wa-form-label" style={{ marginTop: '8px' }}>Message</label>
             <textarea
