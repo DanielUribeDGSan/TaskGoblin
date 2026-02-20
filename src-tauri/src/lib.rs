@@ -28,29 +28,39 @@ async fn toggle_mouse(state: State<'_, AppState>) -> Result<bool, String> {
 
 #[tauri::command]
 async fn schedule_whatsapp(phone: String, message: String, delay_secs: u64) -> Result<(), String> {
-    println!("Scheduled WhatsApp to {} in {} seconds", phone, delay_secs);
+    // Strictly sanitize phone
+    let sanitized_phone = phone.chars().filter(|c| c.is_digit(10) || *c == '+').collect::<String>();
+    
+    println!("Scheduled WhatsApp to {} in {} seconds", sanitized_phone, delay_secs);
+    
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs)).await;
         
-        // Open the native WhatsApp app pointing to the specific chat with pre-filled text
-        let url = format!("whatsapp://send?phone={}&text={}", phone, urlencoding::encode(&message));
+        // Open the native WhatsApp app pointing to the specific chat
+        let url = format!("whatsapp://send?phone={}&text={}", sanitized_phone, urlencoding::encode(&message));
         let _ = std::process::Command::new("open")
             .arg(&url)
             .spawn();
             
-        // Wait 3 seconds for WhatsApp to load and focus
-        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+        // Wait for WhatsApp to load and focus - increased delay for reliability
+        tokio::time::sleep(tokio::time::Duration::from_secs(4)).await;
         
-        // Use AppleScript to simulate pressing the Return key to send the message
+        // Use AppleScript to focus WhatsApp and press return twice to ensure sending
         let script = r#"
             tell application "System Events"
-                keystroke return
+                tell process "WhatsApp"
+                    set frontmost to true
+                    key code 36 -- Return
+                    delay 0.5
+                    key code 36 -- Return again to ensure send if stuck in draft
+                end tell
             end tell
         "#;
+        
         let _ = std::process::Command::new("osascript")
             .arg("-e")
             .arg(script)
-            .spawn();
+            .output(); // Use output to wait for completion
     });
     Ok(())
 }

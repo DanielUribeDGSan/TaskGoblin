@@ -118,6 +118,7 @@ function App() {
 
   // WhatsApp scheduling state
   const [waPhone, setWaPhone] = useState("");
+  const [countryCode, setCountryCode] = useState("+52"); // Default México
   const [waMsg, setWaMsg] = useState("");
   const [waTime, setWaTime] = useState("");
 
@@ -173,10 +174,34 @@ function App() {
     }
   };
 
+  const sanitizePhone = (phone: string, code: string) => {
+    // Remove all non-numeric characters except +
+    const cleaned = phone.replaceAll(/[^\d+]/g, "");
+
+    // If it starts with +, return as is
+    if (cleaned.startsWith("+")) return cleaned;
+
+    // If it has 10 digits and no +, prepend chosen code
+    if (cleaned.length === 10) return code + cleaned;
+
+    // If it's already has the prefix but no +
+    if (cleaned.startsWith(code.replace("+", "")) && cleaned.length > 10) {
+      return "+" + cleaned;
+    }
+
+    return cleaned;
+  };
+
   const handleScheduleWa = async () => {
     try {
       if (!waPhone || !waMsg || !waTime) {
         alert("Please fill in all fields.");
+        return;
+      }
+
+      const finalPhone = sanitizePhone(waPhone, countryCode);
+      if (!finalPhone.startsWith("+")) {
+        alert("Please ensure the number has a country code (e.g., +52)");
         return;
       }
 
@@ -193,13 +218,17 @@ function App() {
 
       const delaySecs = Math.floor(delayMs / 1000);
 
-      await invoke("schedule_whatsapp", { phone: waPhone, message: waMsg, delaySecs });
-
-      alert(`WhatsApp message scheduled to be sent in ${delaySecs} seconds!`);
-      setWaPhone("");
-      setWaMsg("");
-      setWaTime("");
-      setActiveTab("Main");
+      await invoke("schedule_whatsapp", {
+        phone: finalPhone,
+        message: waMsg,
+        delaySecs: delaySecs
+      }).then(() => {
+        alert(`Message scheduled for ${waTime}`);
+        setWaPhone("");
+        setWaMsg("");
+        setWaTime("");
+        setActiveTab("Main");
+      }).catch(alert);
     } catch (err) {
       console.error(err);
       alert("Error scheduling message: " + err);
@@ -268,7 +297,10 @@ function App() {
 
             <ContactPicker
               contacts={contacts}
-              onSelect={(c) => setWaPhone(c.phone)}
+              onSelect={(c) => {
+                const cleaned = c.phone.replaceAll(/[^\d+]/g, "");
+                setWaPhone(cleaned);
+              }}
               currentPhone={waPhone}
               onRefresh={async () => {
                 setIsLoadingContacts(true);
@@ -291,12 +323,29 @@ function App() {
             )}
 
             <label className="wa-form-label" style={{ marginTop: '18px' }}>Contact / Phone Number</label>
-            <input
-              type="text"
-              value={waPhone}
-              onChange={e => setWaPhone(e.target.value)}
-              placeholder="+1234567890"
-            />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <select
+                value={countryCode}
+                onChange={(e) => setCountryCode(e.target.value)}
+                className="country-select"
+              >
+                <option value="+52">🇲🇽 +52</option>
+                <option value="+1">🇺🇸 +1</option>
+                <option value="+34">🇪🇸 +34</option>
+                <option value="+54">🇦🇷 +54</option>
+                <option value="+57">🇨🇴 +57</option>
+                <option value="+56">🇨🇱 +56</option>
+                <option value="+51">🇵🇪 +51</option>
+                <option value="+44">🇬🇧 +44</option>
+              </select>
+              <input
+                type="text"
+                value={waPhone}
+                onChange={e => setWaPhone(e.target.value)}
+                placeholder="443 123 4567"
+                style={{ flex: 1 }}
+              />
+            </div>
 
 
 
