@@ -9,6 +9,7 @@ use enigo::{Enigo, Mouse, Settings};
 
 struct AppState {
     mouse_moving: Mutex<bool>,
+    is_pet_mode: Mutex<bool>,
 }
 
 #[tauri::command]
@@ -163,6 +164,43 @@ fn open_contact_settings() -> Result<(), String> {
     }
 }
 
+#[tauri::command]
+fn set_ignore_cursor_events(window: tauri::Window, ignore: bool) -> Result<(), String> {
+    let _ = window.set_ignore_cursor_events(ignore);
+    Ok(())
+}
+
+#[tauri::command]
+async fn toggle_pet_mode(window: tauri::Window, active: bool, state: State<'_, AppState>) -> Result<(), String> {
+    {
+        let mut pet_mode = state.is_pet_mode.lock().await;
+        *pet_mode = active;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if active {
+            // Make full screen and ignore mouse
+            let _ = window.set_resizable(true);
+            let _ = window.maximize();
+            let _ = window.set_always_on_top(true);
+            let _ = window.set_ignore_cursor_events(true);
+        } else {
+            // Restore sidebar size
+            let _ = window.set_ignore_cursor_events(false);
+            let _ = window.unmaximize();
+            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width: 440.0, height: 820.0 }));
+            let _ = window.set_resizable(false);
+            let _ = window.set_always_on_top(false);
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Pet mode not supported on this OS".to_string())
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -171,11 +209,14 @@ pub fn run() {
             toggle_mouse, 
             schedule_whatsapp, 
             get_contacts,
-            open_contact_settings
+            open_contact_settings,
+            toggle_pet_mode,
+            set_ignore_cursor_events
         ])
         .setup(|app| {
             app.manage(AppState {
                 mouse_moving: Mutex::new(false),
+                is_pet_mode: Mutex::new(false),
             });
 
             let toggle_i = MenuItem::<Wry>::with_id(app, "toggle", "Start Moving Mouse", true, None::<&str>)?;
@@ -234,12 +275,22 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // Auto-hide the main window when it loses focus
+            // Auto-hide the main window when it loses focus, UNLESS we are in pet mode
             if let Some(window) = app.get_webview_window("main") {
                 let window_clone = window.clone();
+                let app_handle = app.handle().clone();
                 window.on_window_event(move |event| match event {
-                    tauri::WindowEvent::Focused(false) => {
-                        let _ = window_clone.hide();
+                    tauri::WindowEvent::Focused(focused) => {
+                        if !focused {
+                            let state = app_handle.state::<AppState>();
+                            let is_pet_mode = tauri::async_runtime::block_on(async {
+                                *state.is_pet_mode.lock().await
+                            });
+                            
+                            if !is_pet_mode {
+                                let _ = window_clone.hide();
+                            }
+                        }
                     }
                     _ => {}
                 });

@@ -53,24 +53,135 @@ body {
   justify-content: center;
 }
 
-/* Base App Wrapper */
+/* Base App Wrapper - The "Card" design */
 .app-wrapper {
-  background: var(--bg-gradient);
+  position: relative;
   width: 360px;
   height: 740px;
+  margin: 20px auto;
+  background: var(--bg-primary);
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  box-shadow: 0 12px 40px var(--shadow-color);
+  border-radius: 24px;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1000;
+}
+
+/* When Pet Mode is Active, the root is transparent, but we keep the Card look for the sidebar */
+.pet-mode-active {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  pointer-events: none;
+  margin: 0;
+}
+
+.sidebar-content {
+  width: 360px;
+  height: 740px;
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
   border-radius: 24px;
   border: 1px solid var(--border-color);
   box-shadow: 0 12px 40px var(--shadow-color);
-  transition: background-color 0.3s ease, border-color 0.3s ease;
-  box-sizing: border-box;
 }
 
-/* Scrollbar Customization */
-::-webkit-scrollbar {
-  width: 4px;
+/* In normal mode (not pet mode), the app-wrapper IS the card */
+.app-wrapper:not(.pet-mode-active) .sidebar-content {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.sidebar-closed .sidebar-content {
+  transform: translateX(-450px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Floating toggle for Pet Mode */
+.floating-toggle {
+  position: fixed;
+  bottom: 40px;
+  left: 20px;
+  width: 44px;
+  height: 44px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  transition: all 0.2s ease;
+  pointer-events: auto !important; /* Always clickable */
+}
+
+/* Floating Restore (Top-Left) */
+.floating-restore-btn {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  width: 44px;
+  height: 44px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  transition: all 0.2s ease;
+  pointer-events: auto !important;
+}
+
+.floating-restore-btn:hover {
+  transform: scale(1.1);
+  background: var(--border-color);
+}
+
+/* Floating toggle for Pet Mode (Bottom-Left) */
+.floating-toggle {
+  position: fixed;
+  bottom: 20px; /* Refined from 40px */
+  left: 20px;
+  width: 44px;
+  height: 44px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  transition: all 0.2s ease;
+  pointer-events: auto !important;
+}
+
+.floating-toggle:hover {
+  transform: scale(1.1);
+  background: var(--border-color);
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -387,9 +498,153 @@ body.dark ::-webkit-calendar-picker-indicator {
   pointer-events: none;
 }
 
-.toast-notification.visible {
-  transform: translateX(-50%) translateY(0);
-  opacity: 1;
+/* 3D Puppy Visuals */
+.pet-3d-container {
+  position: absolute;
+  pointer-events: none;
+  z-index: 999;
+  transition: transform 0.2s linear;
+}
+
+.puppy-3d {
+  position: relative;
+  width: 50px;
+  height: 40px;
+  transform-style: preserve-3d;
+}
+
+.puppy-body {
+  position: absolute;
+  width: 40px;
+  height: 25px;
+  background: #d35400; /* Deep orange/brown */
+  border-radius: 12px;
+  bottom: 0;
+  left: 5px;
+  box-shadow: inset -4px -4px 8px rgba(0,0,0,0.3), 4px 4px 10px rgba(0,0,0,0.2);
+  z-index: 2;
+}
+
+.puppy-spots {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #3d1c02;
+  border-radius: 50%;
+  top: 5px;
+  left: 10px;
+  opacity: 0.6;
+}
+
+.puppy-head {
+  position: absolute;
+  width: 30px;
+  height: 25px;
+  background: #e67e22;
+  border-radius: 10px;
+  top: -15px;
+  right: -5px;
+  box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+  z-index: 3;
+}
+
+.puppy-eyes {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: #2c3e50;
+  border-radius: 50%;
+  top: 8px;
+  right: 6px;
+  box-shadow: -8px 0 0 #2c3e50;
+}
+
+.puppy-nose {
+  position: absolute;
+  width: 6px;
+  height: 4px;
+  background: #000;
+  border-radius: 4px;
+  bottom: 5px;
+  right: 4px;
+}
+
+.puppy-ears-l, .puppy-ears-r {
+  position: absolute;
+  width: 8px;
+  height: 15px;
+  background: #ba4a00;
+  border-radius: 4px;
+  top: -5px;
+}
+.puppy-ears-l { left: 5px; transform: rotate(-15deg); }
+.puppy-ears-r { right: 5px; transform: rotate(15deg); }
+
+.puppy-legs {
+  display: flex;
+  position: absolute;
+  bottom: -8px;
+  left: 10px;
+  gap: 8px;
+}
+
+.leg {
+  width: 6px;
+  height: 12px;
+  background: #d35400;
+  border-radius: 3px;
+  animation: walk 0.4s infinite alternate;
+}
+
+.leg-2 { animation-delay: 0.2s; }
+.leg-3 { 
+  background: #a04000; /* Darker for depth */
+  transform: translateZ(-10px); 
+  animation-delay: 0.1s;
+}
+
+@keyframes walk {
+  from { transform: rotate(-20deg); }
+  to { transform: rotate(20deg); }
+}
+
+.puppy-tail {
+  position: absolute;
+  width: 4px;
+  height: 15px;
+  background: #d35400;
+  left: -2px;
+  top: 5px;
+  border-radius: 2px;
+  transform-origin: bottom;
+  animation: wag 0.2s infinite alternate;
+}
+
+@keyframes wag {
+  from { transform: rotate(-30deg); }
+  to { transform: rotate(30deg); }
+}
+
+.crunch-msg {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ffecb3;
+  color: #5d4037;
+  font-family: 'Comic Sans MS', cursive;
+  font-weight: bold;
+  padding: 4px 8px;
+  border-radius: 10px;
+  border: 2px solid #795548;
+  font-size: 12px;
+  white-space: nowrap;
+  animation: bounce 0.4s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-5px); }
 }
 
 /* Scrollbar for picker */

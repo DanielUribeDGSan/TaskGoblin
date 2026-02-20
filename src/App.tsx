@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import PetAgent from './components/PetAgent';
 import "./App.css";
 
 // SVG Icons can be added here if needed, but we'll use emojis/images for simplicity as per mockup
@@ -13,6 +14,10 @@ const DarkModeIcon = () => (
 
 const MouseIcon = () => (
   <img src="/icon/move.gif" alt="Move Mouse" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
+);
+
+const PetIcon = () => (
+  <img src="/icon/fox.gif" alt="Pet" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
 );
 
 const MsgIcon = () => (
@@ -122,6 +127,24 @@ function App() {
   const [waMsg, setWaMsg] = useState("");
   const [waTime, setWaTime] = useState("");
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: "", visible: false });
+  const [isPetMode, setIsPetMode] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  const togglePetMode = async () => {
+    const newMode = !isPetMode;
+    try {
+      await invoke("toggle_pet_mode", { active: newMode });
+      setIsPetMode(newMode);
+      if (newMode) {
+        setIsSidebarOpen(false); // Auto-hide on start
+      } else {
+        setIsSidebarOpen(true); // Restore on stop
+      }
+      showToast(newMode ? "Pet activated! 🐶" : "Pet is resting... 🏠");
+    } catch (err) {
+      showToast("Error toggling pet mode: " + err);
+    }
+  };
 
   const showToast = (message: string) => {
     setToast({ message, visible: true });
@@ -245,148 +268,217 @@ function App() {
   };
 
   return (
-    <div className="app-wrapper">
-      <div className="top-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <img src="/icon/TaskGoblin.png" alt="TaskGoblin" className="app-logo" />
-          <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>TaskGoblin</h1>
-        </div>
-        <button className="theme-toggle-btn" onClick={() => setIsDarkMode(!isDarkMode)}>
-          {isDarkMode ? <LightModeIcon /> : <DarkModeIcon />}
-        </button>
-      </div>
+    <div className={`app-wrapper ${isPetMode ? 'pet-mode-active' : ''} ${!isSidebarOpen ? 'sidebar-closed' : ''}`}>
+      {isPetMode && !isSidebarOpen && (
+        <>
+          <button
+            className="floating-restore-btn"
+            onClick={togglePetMode}
+            title="Restore Normal Mode"
+          >
+            <img src="/icon/TaskGoblin.png" alt="TaskGoblin" style={{ width: '28px', height: '28px', borderRadius: '6px' }} />
+          </button>
 
-      <div style={{ padding: '0 16px', marginTop: '4px', marginBottom: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '10px 14px', gap: '8px' }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" placeholder="Search" style={{ border: 'none', background: 'transparent', padding: 0, margin: 0, outline: 'none', width: '100%', fontSize: '14px', color: 'var(--text-primary)', boxShadow: 'none' }} readOnly className="no-focus-input" />
-        </div>
-      </div>
+          <button
+            className="floating-toggle"
+            onClick={() => setIsSidebarOpen(true)}
+            title="Show Sidebar"
+          >
+            <PetIcon />
+          </button>
+        </>
+      )}
 
-      <div className="content-area">
-        {activeTab === "Main" && (
-          <>
-            <div className="section-label">MAIN</div>
-
-            <div className={`list-item ${isMouseMoving ? "active" : ""}`} onClick={handleToggleMouse}>
-              <div className="icon"><MouseIcon /></div>
-              <span>Move Mouse</span>
-              <div className={`toggle-switch ${isMouseMoving ? "active" : ""}`}>
-                <div className="toggle-knob"></div>
-              </div>
-            </div>
-
-            <div className="list-item" onClick={() => setActiveTab("WhatsApp")}>
-              <div className="icon"><MsgIcon /></div>
-              <span>WhatsApp Msg</span>
-            </div>
-
-            {/* Added a filler visual structure just to make it look like the long mockup */}
-            <div className="section-label" style={{ marginTop: '20px' }}>OTHERS</div>
-            <div className="list-item">
-              <div className="icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-              </div>
-              <span>Notifications</span>
-            </div>
-            <div className="list-item">
-              <div className="icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-              </div>
-              <span>Settings</span>
-            </div>
-          </>
-        )}
-
-        {activeTab === "WhatsApp" && (
-          <div className="wa-form-container">
-            <div className="list-item" onClick={() => setActiveTab("Main")} style={{ marginBottom: '16px', background: 'var(--border-color)', fontWeight: 600 }}>
-              <span style={{ fontSize: '18px', marginRight: '8px', marginBottom: '8px' }}>←</span> Back
-            </div>
-
-            <ContactPicker
-              contacts={contacts}
-              onSelect={(c) => {
-                const cleaned = c.phone.replace(/[^\d+]/g, "");
-                setWaPhone(cleaned);
-              }}
-              currentPhone={waPhone}
-              onRefresh={async () => {
-                setIsLoadingContacts(true);
-                setContactError(null);
-                try {
-                  const data = await invoke("get_contacts");
-                  setContacts(data as Contact[]);
-                } catch (err) {
-                  console.error(err);
-                  setContactError(err as string);
-                } finally {
-                  setIsLoadingContacts(false);
-                }
-              }}
-            />
-            {isLoadingContacts && (
-              <div style={{ textAlign: 'center', padding: '10px', fontSize: '12px', color: 'var(--accent-color)' }}>
-                ⌛ Fetching your contacts...
-              </div>
-            )}
-
-            <label className="wa-form-label" style={{ marginTop: '18px' }}>Contact / Phone Number</label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <select
-                value={countryCode}
-                onChange={(e) => setCountryCode(e.target.value)}
-                className="country-select"
+      <div className="sidebar-content">
+        <div className="top-header">
+          <div
+            style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
+            onClick={() => {
+              if (isPetMode) {
+                togglePetMode(); // This will deactivate and open sidebar
+              }
+            }}
+          >
+            <img src="/icon/TaskGoblin.png" alt="TaskGoblin" className="app-logo" />
+            <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>TaskGoblin</h1>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {isPetMode && (
+              <button
+                className="theme-toggle-btn"
+                onClick={() => setIsSidebarOpen(false)}
+                title="Hide Sidebar"
+                style={{ background: 'rgba(255,255,255,0.1)' }}
               >
-                <option value="+52">🇲🇽 +52</option>
-                <option value="+1">🇺🇸 +1</option>
-                <option value="+34">🇪🇸 +34</option>
-                <option value="+54">🇦🇷 +54</option>
-                <option value="+57">🇨🇴 +57</option>
-                <option value="+56">🇨🇱 +56</option>
-                <option value="+51">🇵🇪 +51</option>
-                <option value="+44">🇬🇧 +44</option>
-              </select>
-              <input
-                type="text"
-                value={waPhone}
-                onChange={e => setWaPhone(e.target.value)}
-                placeholder="443 123 4567"
-                style={{ flex: 1 }}
-              />
-            </div>
-
-
-
-
-
-            {contactError && (
-              <div style={{ textAlign: 'center', padding: '10px', fontSize: '12px', color: '#ff5555' }}>
-                ❌ Error: {contactError}
-              </div>
+                <span style={{ fontSize: '18px' }}>×</span>
+              </button>
             )}
-
-            <label className="wa-form-label" style={{ marginTop: '8px' }}>Message</label>
-            <textarea
-              value={waMsg}
-              onChange={e => setWaMsg(e.target.value)}
-              placeholder="Type your message here..."
-              style={{ minHeight: '80px', resize: 'vertical' }}
-            />
-
-            <label className="wa-form-label" style={{ marginTop: '8px' }}>Time (HH:MM)</label>
-            <input
-              type="time"
-              value={waTime}
-              onChange={e => setWaTime(e.target.value)}
-            />
-
-            <button className="wa-submit-btn" onClick={handleScheduleWa}>
-              Schedule
+            <button className="theme-toggle-btn" onClick={() => setIsDarkMode(!isDarkMode)}>
+              {isDarkMode ? <LightModeIcon /> : <DarkModeIcon />}
             </button>
           </div>
-        )}
-      </div>
+        </div>
+
+        <div style={{ padding: '0 16px', marginTop: '4px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '10px 14px', gap: '8px' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" placeholder="Search" style={{ border: 'none', background: 'transparent', padding: 0, margin: 0, outline: 'none', width: '100%', fontSize: '14px', color: 'var(--text-primary)', boxShadow: 'none' }} readOnly className="no-focus-input" />
+          </div>
+        </div>
+
+        <div className="content-area">
+          {activeTab === "Pet" && (
+            <div className="wa-form-container">
+              <div className="list-item" onClick={() => setActiveTab("Main")} style={{ marginBottom: '16px', background: 'var(--border-color)', fontWeight: 600 }}>
+                <span style={{ fontSize: '18px', marginRight: '8px', marginBottom: '8px' }}>←</span> Back
+              </div>
+              <h2 style={{ fontSize: '18px', marginBottom: '8px' }}>Puppy Mode 🐶</h2>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+                Activate a gluttonous puppy that travels the screen eating fragments.
+              </p>
+
+              <button
+                className={`wa-submit-btn ${isPetMode ? 'active' : ''}`}
+                onClick={togglePetMode}
+                style={{ padding: '12px', background: isPetMode ? '#8c7ae6' : 'rgba(255,255,255,0.05)' }}
+              >
+                {isPetMode ? "🛑 Deactivate Puppy" : "🚀 Activate Puppy"}
+              </button>
+            </div>
+          )}
+
+          {activeTab === "Main" && (
+            <>
+              <div className="section-label">MAIN</div>
+
+              <div className={`list-item ${isMouseMoving ? "active" : ""}`} onClick={handleToggleMouse}>
+                <div className="icon"><MouseIcon /></div>
+                <span>Move Mouse</span>
+                <div className={`toggle-switch ${isMouseMoving ? "active" : ""}`}>
+                  <div className="toggle-knob"></div>
+                </div>
+              </div>
+
+              <div className={`list-item ${isPetMode ? "active" : ""}`} onClick={togglePetMode}>
+                <div className="icon" style={{ fontSize: '20px' }}><PetIcon /></div>
+                <span>Pet Mode</span>
+                <div className={`toggle-switch ${isPetMode ? "active" : ""}`}>
+                  <div className="toggle-knob"></div>
+                </div>
+              </div>
+
+              <div className="list-item" onClick={() => setActiveTab("WhatsApp")}>
+                <div className="icon"><MsgIcon /></div>
+                <span>WhatsApp Msg</span>
+              </div>
+
+              {/* Added a filler visual structure just to make it look like the long mockup */}
+              <div className="section-label" style={{ marginTop: '20px' }}>OTHERS</div>
+              <div className="list-item">
+                <div className="icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                </div>
+                <span>Notifications</span>
+              </div>
+              <div className="list-item">
+                <div className="icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                </div>
+                <span>Settings</span>
+              </div>
+            </>
+          )}
+
+          {activeTab === "WhatsApp" && (
+            <div className="wa-form-container">
+              <div className="list-item" onClick={() => setActiveTab("Main")} style={{ marginBottom: '16px', background: 'var(--border-color)', fontWeight: 600 }}>
+                <span style={{ fontSize: '18px', marginRight: '8px', marginBottom: '8px' }}>←</span> Back
+              </div>
+
+              <ContactPicker
+                contacts={contacts}
+                onSelect={(c) => {
+                  const cleaned = c.phone.replace(/[^\d+]/g, "");
+                  setWaPhone(cleaned);
+                }}
+                currentPhone={waPhone}
+                onRefresh={async () => {
+                  setIsLoadingContacts(true);
+                  setContactError(null);
+                  try {
+                    const data = await invoke("get_contacts");
+                    setContacts(data as Contact[]);
+                  } catch (err) {
+                    console.error(err);
+                    setContactError(err as string);
+                  } finally {
+                    setIsLoadingContacts(false);
+                  }
+                }}
+              />
+              {isLoadingContacts && (
+                <div style={{ textAlign: 'center', padding: '10px', fontSize: '12px', color: 'var(--accent-color)' }}>
+                  ⌛ Fetching your contacts...
+                </div>
+              )}
+
+              <label className="wa-form-label" style={{ marginTop: '18px' }}>Contact / Phone Number</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <select
+                  value={countryCode}
+                  onChange={(e) => setCountryCode(e.target.value)}
+                  className="country-select"
+                >
+                  <option value="+52">🇲🇽 +52</option>
+                  <option value="+1">🇺🇸 +1</option>
+                  <option value="+34">🇪🇸 +34</option>
+                  <option value="+54">🇦🇷 +54</option>
+                  <option value="+57">🇨🇴 +57</option>
+                  <option value="+56">🇨🇱 +56</option>
+                  <option value="+51">🇵🇪 +51</option>
+                  <option value="+44">🇬🇧 +44</option>
+                </select>
+                <input
+                  type="text"
+                  value={waPhone}
+                  onChange={e => setWaPhone(e.target.value)}
+                  placeholder="443 123 4567"
+                  style={{ flex: 1 }}
+                />
+              </div>
+
+
+
+
+
+              {contactError && (
+                <div style={{ textAlign: 'center', padding: '10px', fontSize: '12px', color: '#ff5555' }}>
+                  ❌ Error: {contactError}
+                </div>
+              )}
+
+              <label className="wa-form-label" style={{ marginTop: '8px' }}>Message</label>
+              <textarea
+                value={waMsg}
+                onChange={e => setWaMsg(e.target.value)}
+                placeholder="Type your message here..."
+                style={{ minHeight: '80px', resize: 'vertical' }}
+              />
+
+              <label className="wa-form-label" style={{ marginTop: '8px' }}>Time (HH:MM)</label>
+              <input
+                type="time"
+                value={waTime}
+                onChange={e => setWaTime(e.target.value)}
+              />
+
+              <button className="wa-submit-btn" onClick={handleScheduleWa}>
+                Schedule
+              </button>
+            </div>
+          )}
+        </div>
+      </div> {/* End of sidebar-content */}
 
       {toast.visible && (
         <div className={`toast-notification ${toast.visible ? 'visible' : ''}`}>
@@ -394,6 +486,8 @@ function App() {
           {toast.message}
         </div>
       )}
+
+      {isPetMode && <PetAgent isSidebarVisible={isSidebarOpen} />}
     </div>
   );
 }
