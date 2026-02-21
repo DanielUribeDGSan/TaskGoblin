@@ -1,5 +1,6 @@
+use device_query::{DeviceQuery, DeviceState, Keycode};
 use enigo::{Enigo, Mouse, Settings};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -311,11 +312,235 @@ async fn close_all_apps() -> Result<(), String> {
     }
 }
 
+#[tauri::command]
+async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::fs;
+        use std::process::Command;
+
+        let was_visible = window.is_visible().unwrap_or(false);
+
+        // Ensure the window is fully hidden before taking the screenshot
+        if was_visible {
+            let _ = window.hide();
+            // Give macOS time to animate the window away
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        }
+
+        let temp_image_path = "/tmp/mouse_crazy_ocr_capture.png";
+
+        // 1. Trigger interactive screencapture.
+        // -i = interactive (selection), -x = no sound
+        let capture_res = tauri::async_runtime::spawn_blocking(move || {
+            Command::new("screencapture")
+                .arg("-i")
+                .arg("-x")
+                .arg(temp_image_path)
+                .output()
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+
+        // After capture is complete (or aborted), show the window again only if it was visible
+        if was_visible {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+
+        match capture_res {
+            Ok(_) => {
+                // If user pressed Escape to cancel, the file might not exist
+                if !std::path::Path::new(temp_image_path).exists() {
+                    return Ok("".to_string()); // Cancelled capture
+                }
+
+                // 2. Swift script to run Vision OCR on the image
+                let swift_script = r#"
+                    import Vision
+                    import Cocoa
+
+                    let imagePath = "/tmp/mouse_crazy_ocr_capture.png"
+                    guard let image = NSImage(contentsOfFile: imagePath),
+                          let tiffData = image.tiffRepresentation,
+                          let bitmap = NSBitmapImageRep(data: tiffData),
+                          let cgImage = bitmap.cgImage else {
+                        print("ERROR: Failed to load image")
+                        exit(1)
+                    }
+
+                    let request = VNRecognizeTextRequest { (request, error) in
+                        guard let observations = request.results as? [VNRecognizedTextObservation] else { return }
+                        let text = observations.compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
+                        print(text)
+                    }
+                    request.recognitionLevel = .accurate
+                    request.usesLanguageCorrection = true
+
+                    let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+                    do {
+                        try handler.perform([request])
+                    } catch {
+                        print("ERROR: \(error)")
+                        exit(1)
+                    }
+                "#;
+
+                let ocr_res = tauri::async_runtime::spawn_blocking(move || {
+                    Command::new("swift").arg("-e").arg(swift_script).output()
+                })
+                .await
+                .map_err(|e| e.to_string())?;
+
+                // 3. Clean up the temp image
+                let _ = fs::remove_file(temp_image_path);
+
+                match ocr_res {
+                    Ok(out) => {
+                        let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                        if stdout.starts_with("ERROR:") {
+                            Err(stdout)
+                        } else {
+                            Ok(stdout)
+                        }
+                    }
+                    Err(e) => Err(format!("OCR extraction failed: {}", e)),
+                }
+            }
+            Err(e) => Err(format!("Screencapture failed: {}", e)),
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("OCR is only supported on macOS".to_string())
+    }
+}
+
+#[tauri::command]
+async fn write_to_clipboard(text: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+
+        let mut child = Command::new("pbcopy")
+            .stdin(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("Failed to start pbcopy: {}", e))?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin
+                .write_all(text.as_bytes())
+                .map_err(|e| format!("Failed to write to pbcopy stdin: {}", e))?;
+        }
+
+        let _ = child
+            .wait()
+            .map_err(|e| format!("Failed to wait for pbcopy: {}", e))?;
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Not supported on this OS".to_string())
+    }
+}
+
+fn notify_user(title: &str, message: &str) {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        let script = format!(
+            "display notification \"{}\" with title \"{}\" sound name \"Default\"",
+            message.replace('"', "\\\""),
+            title.replace('"', "\\\"")
+        );
+        let _ = Command::new("osascript").arg("-e").arg(script).spawn();
+    }
+}
+
+#[tauri::command]
+async fn process_screenshot_ocr(window: tauri::WebviewWindow) -> Result<(), String> {
+    match extract_text_from_screen(window).await {
+        Ok(text) => {
+            if text.trim().is_empty() {
+                // User cancelled or no text found - do nothing silent
+                return Ok(());
+            }
+
+            // Copy to clipboard
+            if let Err(e) = write_to_clipboard(text.clone()).await {
+                notify_user("OCR Error", &format!("Failed to copy: {}", e));
+                return Err(e);
+            }
+
+            // Success Notification
+            let preview = if text.len() > 60 {
+                format!("{}...", &text[..60])
+            } else {
+                text
+            };
+            notify_user("Text Copied!", &preview);
+            Ok(())
+        }
+        Err(e) => {
+            notify_user("OCR Failed", &e);
+            Err(e)
+        }
+    }
+}
+
+#[tauri::command]
+async fn hide_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.hide().map_err(|e| e.to_string())
+}
+
+fn spawn_key_listener(app_handle: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        let device_state = DeviceState::new();
+        let mut last_tap = Instant::now();
+        let mut tap_count = 0;
+        let mut ctrl_was_pressed = false;
+
+        loop {
+            let keys = device_state.get_keys();
+            let ctrl_is_pressed =
+                keys.contains(&Keycode::LControl) || keys.contains(&Keycode::RControl);
+
+            // Detect Edge (Press)
+            if ctrl_is_pressed && !ctrl_was_pressed {
+                let now = Instant::now();
+                if now.duration_since(last_tap) < Duration::from_millis(500) {
+                    tap_count += 1;
+                } else {
+                    tap_count = 1;
+                }
+                last_tap = now;
+
+                if tap_count == 3 {
+                    tap_count = 0; // reset
+                    let handle = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(window) = handle.get_webview_window("main") {
+                            // Trigger the unified screenshot process
+                            let _ = process_screenshot_ocr(window).await;
+                        }
+                    });
+                }
+            }
+
+            ctrl_was_pressed = ctrl_is_pressed;
+            std::thread::sleep(Duration::from_millis(20)); // Polling interval
+        }
+    });
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
+            hide_window,
             is_mouse_moving,
             toggle_mouse,
             schedule_whatsapp,
@@ -326,13 +551,19 @@ pub fn run() {
             request_accessibility,
             toggle_pet_mode,
             set_ignore_cursor_events,
-            close_all_apps
+            close_all_apps,
+            extract_text_from_screen,
+            write_to_clipboard,
+            process_screenshot_ocr
         ])
         .setup(|app| {
             app.manage(AppState {
                 mouse_moving: Mutex::new(false),
                 is_pet_mode: Mutex::new(false),
             });
+
+            // Start global key listener for Triple-Tap Control
+            spawn_key_listener(app.handle().clone());
 
             let toggle_i =
                 MenuItem::<Wry>::with_id(app, "toggle", "Start Moving Mouse", true, None::<&str>)?;

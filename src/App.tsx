@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
+import { register, unregister, isRegistered } from '@tauri-apps/plugin-global-shortcut';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import PetAgent from './components/PetAgent';
@@ -214,8 +216,46 @@ function App() {
     fetchContacts();
     checkAccessibility(); // Check for mouse movement permissions on start
 
+    // Keydown debugger for finding the right shortcut keys
+    const handleKeyDown = (e: KeyboardEvent) => {
+      console.log(`Key pressed: ${e.key} | Code: ${e.code} | Shift: ${e.shiftKey} | Meta(Cmd): ${e.metaKey} | Ctrl: ${e.ctrlKey} | Alt: ${e.altKey}`);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
+    // Register global shortcut
+    console.log("Registering shortcut");
+
+    const setupShortcut = async () => {
+      try {
+        const registered = await isRegistered('Control+Alt+2');
+        if (registered) {
+          console.log("Shortcut already registered, unregistering first");
+          await unregister('Control+Alt+2');
+        }
+        await register('Control+Alt+2', (event) => {
+          if (event.state === 'Pressed') {
+            handleExtractText();
+          }
+        });
+        console.log('Shortcut Registered Successfully');
+      } catch (err) {
+        console.error("Failed to register shortcut:", err);
+      }
+    };
+
+    setupShortcut();
+
+    // Reset sidebar state if window is focused (e.g. from tray)
+    const unlistenPromise = getCurrentWebviewWindow().listen('tauri://focus', () => {
+      console.log("Window focused, opening sidebar state");
+      setIsSidebarOpen(true);
+    });
+
     return () => {
       globalThis.removeEventListener("contextmenu", handleContextMenu);
+      window.removeEventListener("keydown", handleKeyDown);
+      unregister('Control+Alt+2').catch(console.error);
+      unlistenPromise.then(unlisten => unlisten());
     };
   }, []);
 
@@ -260,6 +300,17 @@ function App() {
     } catch (err) {
       console.error(err);
       showToast("Error closing apps: " + err);
+    }
+  };
+
+  const handleExtractText = async () => {
+    try {
+      // Logic for copying and notification is now unified in the Rust backend
+      // for both UI clicks, global shortcuts, and triple-tap.
+      await invoke("process_screenshot_ocr");
+    } catch (err) {
+      console.error(err);
+      // Backend already shows a notification, but we can log it here
     }
   };
 
@@ -367,16 +418,22 @@ function App() {
             <span style={{ fontSize: '10px', color: 'var(--text-secondary)', marginBottom: '-9px', marginLeft: '-4px' }}>By Daniel Uribe</span>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            {isPetMode && (
-              <button
-                className="theme-toggle-btn"
-                onClick={() => setIsSidebarOpen(false)}
-                title="Hide Sidebar"
-                style={{ background: 'rgba(255,255,255,0.1)' }}
-              >
-                <span style={{ fontSize: '18px' }}>×</span>
-              </button>
-            )}
+            <button
+              className="theme-toggle-btn"
+              onClick={() => {
+                setIsSidebarOpen(false);
+                setTimeout(async () => {
+                  try {
+                    await invoke('hide_window');
+                  } catch (e) {
+                    console.error("Failed to hide window", e);
+                  }
+                }, 300); // Wait for the CSS animation to play
+              }}
+              title="Close Sidebar"
+            >
+              <span style={{ fontSize: '18px' }}>×</span>
+            </button>
             <button className="theme-toggle-btn" onClick={() => setIsDarkMode(!isDarkMode)}>
               {isDarkMode ? <LightModeIcon /> : <DarkModeIcon />}
             </button>
@@ -443,6 +500,14 @@ function App() {
 
               {/* Added a filler visual structure just to make it look like the long mockup */}
               <div className="section-label" style={{ marginTop: '20px' }}>OTHERS</div>
+
+              <div className="list-item" onClick={handleExtractText} title="Shortcut: Control+Alt+2">
+                <div className="icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="M12 12v9"></path><path d="m8 17 4 4 4-4"></path></svg>
+                </div>
+                <span>Screenshot to Text</span>
+              </div>
+
               <div className="list-item">
                 <div className="icon">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
