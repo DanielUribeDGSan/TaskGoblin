@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { register, unregister, isRegistered } from '@tauri-apps/plugin-global-shortcut';
+import { listen } from "@tauri-apps/api/event";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import PetAgent from './components/PetAgent';
@@ -251,11 +252,18 @@ function App() {
       setIsSidebarOpen(true);
     });
 
+    // Listen for backend-triggered toasts (captures)
+    const unlistenToast = listen<{ message: string; title: string }>("show-toast", (event) => {
+      setIsSidebarOpen(true); // Open sidebar automatically for the alert
+      showToast(event.payload.message);
+    });
+
     return () => {
       globalThis.removeEventListener("contextmenu", handleContextMenu);
       window.removeEventListener("keydown", handleKeyDown);
       unregister('Control+Alt+2').catch(console.error);
       unlistenPromise.then(unlisten => unlisten());
+      unlistenToast.then(u => u());
     };
   }, []);
 

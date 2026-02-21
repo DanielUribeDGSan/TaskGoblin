@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, State, Wry,
+    Emitter, Manager, State, Wry,
 };
 use tokio::sync::Mutex;
 
@@ -445,21 +445,37 @@ async fn write_to_clipboard(text: String) -> Result<(), String> {
     }
 }
 
-fn notify_user(title: &str, message: &str) {
-    #[cfg(target_os = "macos")]
-    {
-        use std::process::Command;
-        let script = format!(
-            "display notification \"{}\" with title \"{}\" sound name \"Default\"",
-            message.replace('"', "\\\""),
-            title.replace('"', "\\\"")
+fn notify_user<R: tauri::Runtime>(app: &tauri::AppHandle<R>, _title: &str, message: &str) {
+    if let Some(window) = app.get_webview_window("main") {
+        // 1. Ensure main window is visible
+        let _ = window.show();
+        let _ = window.set_focus();
+
+        // 2. Emit the event to the frontend (App.tsx)
+        let _ = window.emit(
+            "show-toast",
+            serde_json::json!({ "title": _title, "message": message }),
         );
-        let _ = Command::new("osascript").arg("-e").arg(script).spawn();
+
+        // 3. Auto-hide the sidebar after a few seconds for background captures
+        let handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_millis(3500)).await;
+            if let Some(w) = handle.get_webview_window("main") {
+                let _ = w.hide();
+            }
+        });
     }
 }
 
 #[tauri::command]
+fn test_toast(app: tauri::AppHandle) {
+    notify_user(&app, "Test Toast", "Esta es una notificación de prueba");
+}
+
+#[tauri::command]
 async fn process_screenshot_ocr(window: tauri::WebviewWindow) -> Result<(), String> {
+    let app_handle = window.app_handle().clone();
     match extract_text_from_screen(window).await {
         Ok(text) => {
             if text.trim().is_empty() {
@@ -469,21 +485,16 @@ async fn process_screenshot_ocr(window: tauri::WebviewWindow) -> Result<(), Stri
 
             // Copy to clipboard
             if let Err(e) = write_to_clipboard(text.clone()).await {
-                notify_user("OCR Error", &format!("Failed to copy: {}", e));
+                notify_user(&app_handle, "OCR Error", &format!("Failed to copy: {}", e));
                 return Err(e);
             }
 
             // Success Notification
-            let preview = if text.len() > 60 {
-                format!("{}...", &text[..60])
-            } else {
-                text
-            };
-            notify_user("Text Copied!", &preview);
+            notify_user(&app_handle, "Text Copied!", "Copied content");
             Ok(())
         }
         Err(e) => {
-            notify_user("OCR Failed", &e);
+            notify_user(&app_handle, "OCR Failed", &e);
             Err(e)
         }
     }
@@ -539,6 +550,7 @@ pub fn run() {
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             hide_window,
             is_mouse_moving,
@@ -554,7 +566,8 @@ pub fn run() {
             close_all_apps,
             extract_text_from_screen,
             write_to_clipboard,
-            process_screenshot_ocr
+            process_screenshot_ocr,
+            test_toast
         ])
         .setup(|app| {
             app.manage(AppState {
@@ -564,6 +577,13 @@ pub fn run() {
 
             // Start global key listener for Triple-Tap Control
             spawn_key_listener(app.handle().clone());
+
+            // Explicitly request notification permissions on startup
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                use tauri_plugin_notification::NotificationExt;
+                let _ = handle.notification().request_permission();
+            });
 
             let toggle_i =
                 MenuItem::<Wry>::with_id(app, "toggle", "Start Moving Mouse", true, None::<&str>)?;
