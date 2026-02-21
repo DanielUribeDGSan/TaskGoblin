@@ -144,6 +144,7 @@ function App() {
   const [isPetMode, setIsPetMode] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isAutostartEnabled, setIsAutostartEnabled] = useState(false);
+  const [appSearchTerm, setAppSearchTerm] = useState("");
 
   const checkAccessibility = async () => {
     try {
@@ -419,7 +420,7 @@ function App() {
         </button>
       )}
 
-      <div className="sidebar-content">
+      <div className="sidebar-content" data-tauri-drag-region>
         <div className="sidebar-header" data-tauri-drag-region>
           <div
             className="logo-section"
@@ -429,7 +430,7 @@ function App() {
           >
             <img src="/icon/TaskGoblin.png" alt="TaskGoblin" className="app-logo" data-tauri-drag-region />
             <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }} data-tauri-drag-region>TaskGoblin</h1>
-            <span style={{ fontSize: '10px', color: 'var(--text-secondary)', marginBottom: '-9px', marginLeft: '-4px' }} data-tauri-drag-region>Mascota Gato 2.0</span>
+            <span style={{ fontSize: '10px', color: 'var(--text-secondary)', marginBottom: '-9px', marginLeft: '-4px' }} data-tauri-drag-region>by Daniel Uribe</span>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
@@ -454,14 +455,16 @@ function App() {
           </div>
         </div>
 
-        <div style={{ padding: '0 16px', marginTop: '4px', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '10px 14px', gap: '8px' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-            <input type="text" placeholder="Search" style={{ border: 'none', background: 'transparent', padding: 0, margin: 0, outline: 'none', width: '100%', fontSize: '14px', color: 'var(--text-primary)', boxShadow: 'none' }} readOnly className="no-focus-input" />
+        {activeTab === "Main" && (
+          <div style={{ padding: '0 16px', marginTop: '4px', marginBottom: '16px' }} data-tauri-drag-region>
+            <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '10px 14px', gap: '8px' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" placeholder="Search" style={{ border: 'none', background: 'transparent', padding: 0, margin: 0, outline: 'none', width: '100%', fontSize: '14px', color: 'var(--text-primary)', boxShadow: 'none' }} value={appSearchTerm} onChange={(e) => setAppSearchTerm(e.target.value)} className="no-focus-input" />
+            </div>
           </div>
-        </div>
+        )}
 
-        <div className="content-area">
+        <div className="content-area" data-tauri-drag-region>
           {activeTab === "Pet" && (
             <div className="wa-form-container">
               <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
@@ -483,62 +486,73 @@ function App() {
           )}
 
           {activeTab === "Main" && (
-            <>
-              <div className="section-label">MAIN</div>
+            <div data-tauri-drag-region style={{ flex: 1 }}>
+              {"main".includes(appSearchTerm.toLowerCase()) && <div className="section-label" data-tauri-drag-region>MAIN</div>}
 
-              <div className={`list-item ${isMouseMoving ? "active" : ""}`} onClick={handleToggleMouse}>
-                <div className="icon"><MouseIcon /></div>
-                <span>Move Mouse</span>
-                <div className={`toggle-switch ${isMouseMoving ? "active" : ""}`}>
-                  <div className="toggle-knob"></div>
+              {"move mouse".includes(appSearchTerm.toLowerCase()) && (
+                <div className={`list-item ${isMouseMoving ? "active" : ""}`} onClick={handleToggleMouse}>
+                  <div className="icon"><MouseIcon /></div>
+                  <span>Move Mouse</span>
+                  <div className={`toggle-switch ${isMouseMoving ? "active" : ""}`}>
+                    <div className="toggle-knob"></div>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <div className={`list-item ${isPetMode ? 'active' : ''}`} onClick={togglePetMode}>
-                <div className="icon"><PetIcon /></div>
-                <span>Mascota (Gato Realista)</span>
-                <div className={`toggle-switch ${isPetMode ? 'active' : ''}`}>
-                  <div className="toggle-knob" />
+              {"mascota (gato realista)".includes(appSearchTerm.toLowerCase()) && (
+                <div className={`list-item ${isPetMode ? 'active' : ''}`} onClick={togglePetMode}>
+                  <div className="icon"><PetIcon /></div>
+                  <span>Mascota (Gato Realista)</span>
+                  <div className={`toggle-switch ${isPetMode ? 'active' : ''}`}>
+                    <div className="toggle-knob" />
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <div className="list-item" onClick={() => setActiveTab("WhatsApp")}>
-                <div className="icon"><MsgIcon /></div>
-                <span>WhatsApp Msg</span>
-              </div>
-
-
-              <div className="list-item" onClick={handleExtractText} title="Shortcut: Control+Alt+2">
-                <div className="icon">
-                  <div className="icon"><ScreenshotIcon /></div>
+              {"whatsapp msg".includes(appSearchTerm.toLowerCase()) && (
+                <div className="list-item" onClick={() => { setActiveTab("WhatsApp"); setAppSearchTerm(""); }}>
+                  <div className="icon"><MsgIcon /></div>
+                  <span>WhatsApp Msg</span>
                 </div>
-                <span>Screenshot to Text</span>
-              </div>
+              )}
 
-              <div className="list-item" onClick={handleCloseApps}>
-                <div className="icon"><CloseIcon /></div>
-                <span>Close All Apps</span>
-              </div>
+              {"screenshot to text".includes(appSearchTerm.toLowerCase()) && (
+                <div className="list-item" onClick={handleExtractText} title="Shortcut: Control+Alt+2">
+                  <div className="icon">
+                    <div className="icon"><ScreenshotIcon /></div>
+                  </div>
+                  <span>Screenshot to Text</span>
+                </div>
+              )}
 
+              {"close all apps".includes(appSearchTerm.toLowerCase()) && (
+                <div className="list-item" onClick={handleCloseApps}>
+                  <div className="icon"><CloseIcon /></div>
+                  <span>Close All Apps</span>
+                </div>
+              )}
 
               {/* Added a filler visual structure just to make it look like the long mockup */}
-              <div className="section-label" style={{ marginTop: '20px' }}>OTHERS</div>
+              {"others".includes(appSearchTerm.toLowerCase()) && <div className="section-label" style={{ marginTop: '20px' }} data-tauri-drag-region>OTHERS</div>}
 
-
-
-              <div className="list-item">
-                <div className="icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+              {"notifications".includes(appSearchTerm.toLowerCase()) && (
+                <div className="list-item">
+                  <div className="icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                  </div>
+                  <span>Notifications</span>
                 </div>
-                <span>Notifications</span>
-              </div>
-              <div className="list-item" onClick={() => setActiveTab("Settings")}>
-                <div className="icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+              )}
+
+              {"settings".includes(appSearchTerm.toLowerCase()) && (
+                <div className="list-item" onClick={() => { setActiveTab("Settings"); setAppSearchTerm(""); }}>
+                  <div className="icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                  </div>
+                  <span>Settings</span>
                 </div>
-                <span>Settings</span>
-              </div>
-            </>
+              )}
+            </div>
           )}
 
           {activeTab === "Settings" && (
@@ -660,7 +674,7 @@ function App() {
                     onChange={(date: Date | null) => setWaDateTime(date)}
                     showTimeSelect
                     showTimeSelectOnly
-                    timeIntervals={15}
+                    timeIntervals={1}
                     timeCaption="Time"
                     dateFormat="h:mm aa"
                     className="custom-datepicker"

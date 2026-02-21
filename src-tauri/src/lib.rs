@@ -376,6 +376,7 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
                     }
                     request.recognitionLevel = .accurate
                     request.usesLanguageCorrection = true
+                    request.recognitionLanguages = ["es-ES", "en-US"]
 
                     let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
                     do {
