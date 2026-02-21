@@ -1,11 +1,11 @@
+use enigo::{Enigo, Mouse, Settings};
 use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem},
-    tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState},
-    Manager, Wry, State
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Manager, State, Wry,
 };
 use tokio::sync::Mutex;
-use enigo::{Enigo, Mouse, Settings};
 
 struct AppState {
     mouse_moving: Mutex<bool>,
@@ -30,22 +30,30 @@ async fn toggle_mouse(state: State<'_, AppState>) -> Result<bool, String> {
 #[tauri::command]
 async fn schedule_whatsapp(phone: String, message: String, delay_secs: u64) -> Result<(), String> {
     // Strictly sanitize phone
-    let sanitized_phone = phone.chars().filter(|c| c.is_digit(10) || *c == '+').collect::<String>();
-    
-    println!("Scheduled WhatsApp to {} in {} seconds", sanitized_phone, delay_secs);
-    
+    let sanitized_phone = phone
+        .chars()
+        .filter(|c| c.is_digit(10) || *c == '+')
+        .collect::<String>();
+
+    println!(
+        "Scheduled WhatsApp to {} in {} seconds",
+        sanitized_phone, delay_secs
+    );
+
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs)).await;
-        
+
         // Open the native WhatsApp app pointing to the specific chat
-        let url = format!("whatsapp://send?phone={}&text={}", sanitized_phone, urlencoding::encode(&message));
-        let _ = std::process::Command::new("open")
-            .arg(&url)
-            .spawn();
-            
+        let url = format!(
+            "whatsapp://send?phone={}&text={}",
+            sanitized_phone,
+            urlencoding::encode(&message)
+        );
+        let _ = std::process::Command::new("open").arg(&url).spawn();
+
         // Wait for WhatsApp to load and focus - increased delay for reliability
         tokio::time::sleep(tokio::time::Duration::from_secs(4)).await;
-        
+
         // Use AppleScript to focus WhatsApp and press return twice to ensure sending
         let script = r#"
             tell application "System Events"
@@ -57,7 +65,7 @@ async fn schedule_whatsapp(phone: String, message: String, delay_secs: u64) -> R
                 end tell
             end tell
         "#;
-        
+
         let _ = std::process::Command::new("osascript")
             .arg("-e")
             .arg(script)
@@ -78,8 +86,8 @@ async fn get_contacts() -> Result<Vec<Contact>, String> {
     #[cfg(target_os = "macos")]
     {
         use std::process::Command;
-        
-        // This is a more compatible bulk fetch. We get names and phones separately 
+
+        // This is a more compatible bulk fetch. We get names and phones separately
         // to avoid the -1728 error that occurs when mixing them in a filter.
         let script = r#"
             tell application "Contacts"
@@ -103,16 +111,15 @@ async fn get_contacts() -> Result<Vec<Contact>, String> {
         "#;
 
         let res = tauri::async_runtime::spawn_blocking(move || {
-            Command::new("osascript")
-                .arg("-e")
-                .arg(script)
-                .output()
-        }).await.map_err(|e| e.to_string())?;
+            Command::new("osascript").arg("-e").arg(script).output()
+        })
+        .await
+        .map_err(|e| e.to_string())?;
 
         match res {
             Ok(out) => {
                 let stdout = String::from_utf8_lossy(&out.stdout);
-                
+
                 if stdout.starts_with("ERROR|") {
                     return Err(stdout.replace("ERROR|", ""));
                 }
@@ -217,7 +224,11 @@ fn set_ignore_cursor_events(window: tauri::Window, ignore: bool) -> Result<(), S
 }
 
 #[tauri::command]
-async fn toggle_pet_mode(window: tauri::Window, active: bool, state: State<'_, AppState>) -> Result<(), String> {
+async fn toggle_pet_mode(
+    window: tauri::Window,
+    active: bool,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     {
         let mut pet_mode = state.is_pet_mode.lock().await;
         *pet_mode = active;
@@ -235,7 +246,10 @@ async fn toggle_pet_mode(window: tauri::Window, active: bool, state: State<'_, A
             // Restore sidebar size
             let _ = window.set_ignore_cursor_events(false);
             let _ = window.unmaximize();
-            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width: 440.0, height: 820.0 }));
+            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize {
+                width: 440.0,
+                height: 820.0,
+            }));
             let _ = window.set_resizable(false);
             let _ = window.set_always_on_top(false);
         }
@@ -249,11 +263,12 @@ async fn toggle_pet_mode(window: tauri::Window, active: bool, state: State<'_, A
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            is_mouse_moving, 
-            toggle_mouse, 
-            schedule_whatsapp, 
+            is_mouse_moving,
+            toggle_mouse,
+            schedule_whatsapp,
             get_contacts,
             open_contact_settings,
             open_accessibility_settings,
@@ -268,7 +283,8 @@ pub fn run() {
                 is_pet_mode: Mutex::new(false),
             });
 
-            let toggle_i = MenuItem::<Wry>::with_id(app, "toggle", "Start Moving Mouse", true, None::<&str>)?;
+            let toggle_i =
+                MenuItem::<Wry>::with_id(app, "toggle", "Start Moving Mouse", true, None::<&str>)?;
             let quit_i = MenuItem::<Wry>::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::<Wry>::with_items(app, &[&toggle_i, &quit_i])?;
 
@@ -289,7 +305,7 @@ pub fn run() {
                             let state = app_handle.state::<AppState>();
                             let mut moving = state.mouse_moving.lock().await;
                             *moving = !*moving;
-                            
+
                             if *moving {
                                 let _ = toggle_item.set_text("Stop Moving Mouse");
                             } else {
@@ -313,7 +329,8 @@ pub fn run() {
                             } else {
                                 if let Ok(size) = window.outer_size() {
                                     let x = (position.x as i32) - (size.width as i32 / 2);
-                                    let _ = window.set_position(tauri::PhysicalPosition::new(x, 30));
+                                    let _ =
+                                        window.set_position(tauri::PhysicalPosition::new(x, 30));
                                 }
                                 let _ = window.show();
                                 let _ = window.set_focus();
@@ -335,7 +352,7 @@ pub fn run() {
                             let is_pet_mode = tauri::async_runtime::block_on(async {
                                 *state.is_pet_mode.lock().await
                             });
-                            
+
                             if !is_pet_mode {
                                 let _ = window_clone.hide();
                             }

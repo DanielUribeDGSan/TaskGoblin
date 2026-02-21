@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import PetAgent from './components/PetAgent';
 import "./App.css";
 
@@ -129,6 +130,7 @@ function App() {
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: "", visible: false });
   const [isPetMode, setIsPetMode] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isAutostartEnabled, setIsAutostartEnabled] = useState(false);
 
   const checkAccessibility = async () => {
     try {
@@ -179,6 +181,9 @@ function App() {
       setIsMouseMoving(state as boolean);
     }).catch(console.error);
 
+    // Check autostart state
+    isEnabled().then(setIsAutostartEnabled).catch(console.error);
+
     // Disable right click / default context menu for an app-like feel
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
@@ -221,6 +226,23 @@ function App() {
       showToast(newMode ? "Pet activated! 🐶" : "Pet is resting... 🏠");
     } catch (err) {
       showToast("Error toggling pet mode: " + err);
+    }
+  };
+
+  const handleToggleAutostart = async () => {
+    try {
+      if (isAutostartEnabled) {
+        await disable();
+        setIsAutostartEnabled(false);
+        showToast("Start on Login disabled");
+      } else {
+        await enable();
+        setIsAutostartEnabled(true);
+        showToast("Start on Login enabled");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error toggling autostart: " + err);
     }
   };
 
@@ -407,13 +429,34 @@ function App() {
                 </div>
                 <span>Notifications</span>
               </div>
-              <div className="list-item">
+              <div className="list-item" onClick={() => setActiveTab("Settings")}>
                 <div className="icon">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                 </div>
                 <span>Settings</span>
               </div>
             </>
+          )}
+
+          {activeTab === "Settings" && (
+            <div className="wa-form-container">
+              <div className="list-item" onClick={() => setActiveTab("Main")} style={{ marginBottom: '16px', background: 'var(--border-color)', fontWeight: 600 }}>
+                <span style={{ fontSize: '18px', marginRight: '8px', marginBottom: '8px' }}>←</span> Back
+              </div>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+                App configuration and behavior.
+              </p>
+
+              <div className={`list-item ${isAutostartEnabled ? "active" : ""}`} onClick={handleToggleAutostart}>
+                <div className="icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
+                </div>
+                <span>Start on Login</span>
+                <div className={`toggle-switch ${isAutostartEnabled ? "active" : ""}`}>
+                  <div className="toggle-knob"></div>
+                </div>
+              </div>
+            </div>
           )}
 
           {activeTab === "WhatsApp" && (
