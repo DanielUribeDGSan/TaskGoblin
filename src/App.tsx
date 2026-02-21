@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 import PetAgent from './components/PetAgent';
 import "./App.css";
 
@@ -126,7 +128,7 @@ function App() {
   const [waPhone, setWaPhone] = useState("");
   const [countryCode, setCountryCode] = useState("+52"); // Default México
   const [waMsg, setWaMsg] = useState("");
-  const [waTime, setWaTime] = useState("");
+  const [waDateTime, setWaDateTime] = useState<Date | null>(new Date());
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: "", visible: false });
   const [isPetMode, setIsPetMode] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -271,7 +273,7 @@ function App() {
 
   const handleScheduleWa = async () => {
     try {
-      if (!waPhone || !waMsg || !waTime) {
+      if (!waPhone || !waMsg || !waDateTime) {
         alert("Please fill in all fields.");
         return;
       }
@@ -283,14 +285,12 @@ function App() {
       }
 
       const now = new Date();
-      const [hours, minutes] = waTime.split(':').map(Number);
-      const target = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0);
+      const target = waDateTime;
 
-      let delayMs = target.getTime() - now.getTime();
+      const delayMs = target.getTime() - now.getTime();
       if (delayMs < 0) {
-        // If the time already passed today, schedule it for tomorrow
-        target.setDate(target.getDate() + 1);
-        delayMs = target.getTime() - now.getTime();
+        alert("The selected date and time has already passed. Please choose a future time.");
+        return;
       }
 
       const delaySecs = Math.floor(delayMs / 1000);
@@ -300,10 +300,10 @@ function App() {
         message: waMsg,
         delaySecs: delaySecs
       }).then(() => {
-        showToast(`Message scheduled for ${waTime} 🚀`);
+        showToast(`Message scheduled for ${waDateTime.toLocaleString()} 🚀`);
         setWaPhone("");
         setWaMsg("");
-        setWaTime("");
+        setWaDateTime(new Date());
         setActiveTab("Main");
       }).catch(err => {
         console.error(err);
@@ -536,14 +536,38 @@ function App() {
               />
 
 
-              <label className="wa-form-label" style={{ marginTop: '8px' }}>Time (HH:MM)</label>
-              <input
-                type="time"
-                value={waTime}
-                onChange={e => setWaTime(e.target.value)}
-              />
+              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                <div style={{ flex: 1, position: 'relative' }}>
+                  <label className="wa-form-label">Date</label>
+                  <DatePicker
+                    selected={waDateTime}
+                    onChange={(date: Date | null) => setWaDateTime(date)}
+                    dateFormat="MM/dd/yyyy"
+                    className="custom-datepicker"
+                    minDate={new Date()}
+                    maxDate={new Date(new Date().getFullYear(), 11, 31)}
+                    placeholderText="Select Date"
+                    portalId="root"
+                  />
+                </div>
+                <div style={{ flex: 1, position: 'relative' }}>
+                  <label className="wa-form-label">Time</label>
+                  <DatePicker
+                    selected={waDateTime}
+                    onChange={(date: Date | null) => setWaDateTime(date)}
+                    showTimeSelect
+                    showTimeSelectOnly
+                    timeIntervals={15}
+                    timeCaption="Time"
+                    dateFormat="h:mm aa"
+                    className="custom-datepicker"
+                    placeholderText="Select Time"
+                    portalId="root"
+                  />
+                </div>
+              </div>
 
-              <button className="wa-submit-btn" onClick={handleScheduleWa}>
+              <button className="wa-submit-btn" onClick={handleScheduleWa} style={{ marginTop: '16px' }}>
                 Schedule
               </button>
             </div>
