@@ -261,6 +261,56 @@ async fn toggle_pet_mode(
     }
 }
 
+#[tauri::command]
+async fn close_all_apps() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+
+        // Expanded list of applications to explicitly NOT close when "Close All Apps" is triggered
+        let script = r#"
+            set appsToKeep to {"Finder", "mouse-crazy-app", "TaskGoblin", "Terminal", "iTerm", "iTerm2", "System Events", "System Settings", "System Preferences", "Activity Monitor", "Console", "Docker Desktop", "Docker", "1Password", "1Password 8", "Alfred", "Raycast", "Dropbox", "Google Drive", "OneDrive", "Rectangle", "Magnet", "BetterTouchTool", "Logi Options", "Logi Options+", "Logitech G HUB"}
+
+            set bundleIdsToQuit to {}
+            tell application "System Events"
+                set activeProcs to every application process where background only is false
+                repeat with proc in activeProcs
+                    set pName to name of proc
+                    if pName is not in appsToKeep then
+                        try
+                            set bundleId to bundle identifier of proc
+                            if bundleId is not missing value then
+                                set end of bundleIdsToQuit to bundleId
+                            end if
+                        end try
+                    end if
+                end repeat
+            end tell
+            
+            repeat with bid in bundleIdsToQuit
+                try
+                    tell application id bid to quit
+                end try
+            end repeat
+        "#;
+
+        let res = tauri::async_runtime::spawn_blocking(move || {
+            Command::new("osascript").arg("-e").arg(script).output()
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+
+        match res {
+            Ok(_) => Ok(()),
+            Err(e) => Err(format!("Command execution failed: {}", e)),
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Not supported on this OS".to_string())
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_autostart::Builder::new().build())
@@ -275,7 +325,8 @@ pub fn run() {
             check_accessibility,
             request_accessibility,
             toggle_pet_mode,
-            set_ignore_cursor_events
+            set_ignore_cursor_events,
+            close_all_apps
         ])
         .setup(|app| {
             app.manage(AppState {

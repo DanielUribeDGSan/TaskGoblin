@@ -27,6 +27,10 @@ const MsgIcon = () => (
   <img src="/icon/chat.gif" alt="Move Mouse" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
 );
 
+const CloseIcon = () => (
+  <img src="/icon/close.gif" alt="Move Mouse" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
+);
+
 interface Contact {
   name: string;
   phone: string;
@@ -248,6 +252,17 @@ function App() {
     }
   };
 
+  const handleCloseApps = async () => {
+    try {
+      showToast("Closing applications... 🧹");
+      await invoke("close_all_apps");
+      showToast("All apps closed! ✨");
+    } catch (err) {
+      console.error(err);
+      showToast("Error closing apps: " + err);
+    }
+  };
+
   const showToast = (message: string) => {
     setToast({ message, visible: true });
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
@@ -419,6 +434,11 @@ function App() {
               <div className="list-item" onClick={() => setActiveTab("WhatsApp")}>
                 <div className="icon"><MsgIcon /></div>
                 <span>WhatsApp Msg</span>
+              </div>
+
+              <div className="list-item" onClick={handleCloseApps}>
+                <div className="icon"><CloseIcon /></div>
+                <span>Close All Apps</span>
               </div>
 
               {/* Added a filler visual structure just to make it look like the long mockup */}
