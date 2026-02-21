@@ -37,7 +37,9 @@ body.dark {
   --shadow-color: rgba(0, 0, 0, 0.3);
 }
 
-html, body, #root {
+html,
+body,
+#root {
   margin: 0;
   padding: 0;
   background-color: transparent !important;
@@ -57,8 +59,8 @@ body {
 .app-wrapper {
   position: relative;
   width: 360px;
-  height: 740px;
-  margin: 20px auto;
+  height: 580px;
+  margin: auto;
   background: var(--bg-primary);
   display: flex;
   flex-direction: column;
@@ -66,7 +68,8 @@ body {
   border-radius: 24px;
   border: 1px solid var(--border-color);
   overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease;
+  transform-origin: top right;
   z-index: 1000;
 }
 
@@ -87,17 +90,17 @@ body {
 
 .sidebar-content {
   width: 360px;
-  height: 740px;
+  height: 580px;
   background: var(--bg-primary);
   display: flex;
   flex-direction: column;
   pointer-events: auto;
-  /* Springy animation matching Apple-like volume drop */
-  transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.2), opacity 0.4s ease;
+  /* Content is static inside the animated wrapper */
   border-radius: 24px;
   border: 1px solid var(--border-color);
   box-shadow: 0 12px 40px var(--shadow-color);
-  transform-origin: bottom left; /* Originates from near the toggle button */
+  transform-origin: bottom left;
+  /* Originates from near the toggle button */
 }
 
 /* In normal mode (not pet mode), the app-wrapper IS the card */
@@ -110,30 +113,18 @@ body {
   border-radius: 0;
 }
 
-.sidebar-closed .sidebar-content {
-  transform: scale(0.8) translateY(20px);
+/* Hide only if NOT in pet mode or if specifically closed */
+.app-wrapper.sidebar-closed:not(.pet-mode-active) {
+  transform: scale(0.85) translateY(-30px);
   opacity: 0;
   pointer-events: none;
 }
 
-/* Floating toggle for Pet Mode */
-.floating-toggle {
-  position: fixed;
-  bottom: 40px;
-  left: 20px;
-  width: 44px;
-  height: 44px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 9999;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-  transition: all 0.2s ease;
-  pointer-events: auto !important; /* Always clickable */
+/* In pet mode, the sidebar-content is what animates, not the whole wrapper */
+.pet-mode-active.sidebar-closed .sidebar-content {
+  transform: scale(0.85) translateY(40px);
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* Floating Restore (Top-Left) */
@@ -151,7 +142,7 @@ body {
   justify-content: center;
   cursor: pointer;
   z-index: 9999;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   transition: all 0.2s ease;
   pointer-events: auto !important;
 }
@@ -164,7 +155,7 @@ body {
 /* Floating toggle for Pet Mode (Bottom-Left) */
 .floating-toggle {
   position: fixed;
-  bottom: 20px; /* Refined from 40px */
+  bottom: 20px;
   left: 20px;
   width: 44px;
   height: 44px;
@@ -176,7 +167,7 @@ body {
   justify-content: center;
   cursor: pointer;
   z-index: 9999;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   transition: all 0.2s ease;
   pointer-events: auto !important;
 }
@@ -185,16 +176,18 @@ body {
   transform: scale(1.1);
   background: var(--border-color);
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: 4px;
 }
 
-/* Top Header */
-.top-header {
+/* Sidebar Header */
+.sidebar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -236,7 +229,7 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 0 16px;
+  padding: 0 16px 20px;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -282,7 +275,7 @@ body {
   border-radius: 18px;
   position: relative;
   transition: background-color 0.3s;
-  box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
   margin-left: auto;
 }
 
@@ -299,7 +292,7 @@ body {
   top: 2px;
   left: 2px;
   transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .toggle-switch.active .toggle-knob {
@@ -307,7 +300,9 @@ body {
 }
 
 /* Inputs and Forms for WhatsApp Scheduler */
-input, textarea {
+input,
+select,
+textarea {
   font-family: inherit;
   font-size: 13px;
   font-weight: 500;
@@ -318,9 +313,11 @@ input, textarea {
   padding: 10px;
   border-radius: 8px;
   outline: none;
+  box-sizing: border-box;
 }
 
-input:focus, textarea:focus {
+input:focus,
+textarea:focus {
   border-color: var(--accent-color) !important;
 }
 
@@ -345,7 +342,8 @@ body.dark ::-webkit-calendar-picker-indicator {
   flex: 1;
   position: relative;
   z-index: 10;
-  padding-bottom: 24px; /* Space at the bottom */
+  padding-bottom: 14px;
+  /* Space at the bottom */
 }
 
 .wa-form-container {
@@ -354,7 +352,8 @@ body.dark ::-webkit-calendar-picker-indicator {
   flex-direction: column;
   flex: 1;
   overflow-y: auto;
-  padding-bottom: 40px; /* Extra space for scrolling */
+  padding-bottom: 14px;
+  /* Extra space for scrolling */
 }
 
 .wa-form-label {
@@ -390,7 +389,7 @@ body.dark ::-webkit-calendar-picker-indicator {
   border: 1px solid var(--border-color);
   border-radius: 12px;
   margin-top: 8px;
-  max-height: 280px;
+  min-height: 200px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -401,6 +400,32 @@ body.dark ::-webkit-calendar-picker-indicator {
   margin: 8px !important;
   width: calc(100% - 16px) !important;
   font-size: 13px !important;
+}
+
+.country-select {
+  width: 140px;
+  cursor: pointer;
+  padding: 12px 10px !important;
+  font-size: 14px !important;
+}
+
+.wa-back-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  margin-bottom: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.wa-back-btn:hover {
+  background: var(--list-hover);
 }
 
 .contact-group-header {
@@ -508,7 +533,7 @@ body.dark ::-webkit-calendar-picker-indicator {
   pointer-events: auto;
 }
 
-/* 3D Puppy Visuals */
+/* 3D Cat Visuals (Mascota 2.0) */
 .pet-3d-container {
   position: absolute;
   pointer-events: none;
@@ -516,145 +541,243 @@ body.dark ::-webkit-calendar-picker-indicator {
   transition: transform 0.2s linear;
 }
 
-.puppy-3d {
+.cat-3d {
   position: relative;
   width: 50px;
   height: 40px;
   transform-style: preserve-3d;
 }
 
-.puppy-body {
+.cat-body {
   position: absolute;
-  width: 40px;
-  height: 25px;
-  background: #d35400; /* Deep orange/brown */
-  border-radius: 12px;
+  width: 42px;
+  height: 22px;
+  background: #2d3436;
+  /* Dark slate cat */
+  border-radius: 12px 12px 8px 8px;
   bottom: 0;
-  left: 5px;
-  box-shadow: inset -4px -4px 8px rgba(0,0,0,0.3), 4px 4px 10px rgba(0,0,0,0.2);
+  left: 4px;
+  box-shadow: inset -4px -2px 6px rgba(0, 0, 0, 0.5), 4px 4px 10px rgba(0, 0, 0, 0.2);
   z-index: 2;
 }
 
-.puppy-spots {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  background: #3d1c02;
-  border-radius: 50%;
-  top: 5px;
-  left: 10px;
-  opacity: 0.6;
-}
-
-.puppy-head {
+.cat-head {
   position: absolute;
   width: 30px;
-  height: 25px;
-  background: #e67e22;
-  border-radius: 10px;
-  top: -15px;
-  right: -5px;
-  box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+  height: 24px;
+  background: #2d3436;
+  border-radius: 14px 14px 8px 8px;
+  top: -16px;
+  right: -6px;
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
   z-index: 3;
 }
 
-.puppy-eyes {
+.cat-ears-l,
+.cat-ears-r {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 12px solid #2d3436;
+  top: -10px;
+}
+
+.cat-ears-l {
+  left: 2px;
+  transform: rotate(-10deg);
+}
+
+.cat-ears-r {
+  right: 2px;
+  transform: rotate(10deg);
+}
+
+.cat-eyes {
   position: absolute;
   width: 4px;
-  height: 4px;
-  background: #2c3e50;
+  height: 6px;
+  background: #c1ff00;
+  /* Creepy cat yellow eyes */
   border-radius: 50%;
   top: 8px;
   right: 6px;
-  box-shadow: -8px 0 0 #2c3e50;
+  box-shadow: -10px 0 0 #c1ff00;
 }
 
-.puppy-nose {
+.cat-eyes::after {
+  content: '';
   position: absolute;
-  width: 6px;
+  width: 1px;
   height: 4px;
   background: #000;
-  border-radius: 4px;
-  bottom: 5px;
-  right: 4px;
+  left: 1.5px;
+  top: 1px;
 }
 
-.puppy-ears-l, .puppy-ears-r {
+
+.cat-tail {
   position: absolute;
-  width: 8px;
-  height: 15px;
-  background: #ba4a00;
-  border-radius: 4px;
-  top: -5px;
+  width: 25px;
+  height: 25px;
+  border: 5px solid #2d3436;
+  border-bottom: 0;
+  border-left: 0;
+  border-radius: 0 20px 0 0;
+  left: -15px;
+  top: -10px;
+  transform-origin: bottom right;
+  animation: s-wag 2s infinite ease-in-out;
 }
-.puppy-ears-l { left: 5px; transform: rotate(-15deg); }
-.puppy-ears-r { right: 5px; transform: rotate(15deg); }
 
-.puppy-legs {
+@keyframes s-wag {
+
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  50% {
+    transform: rotate(20deg);
+  }
+}
+
+.cat-legs {
   display: flex;
   position: absolute;
-  bottom: -8px;
-  left: 10px;
-  gap: 8px;
+  bottom: -4px;
+  left: 8px;
+  gap: 12px;
 }
 
-.leg {
-  width: 6px;
-  height: 12px;
-  background: #d35400;
-  border-radius: 3px;
-  animation: walk 0.4s infinite alternate;
-}
-
-.leg-2 { animation-delay: 0.2s; }
-.leg-3 { 
-  background: #a04000; /* Darker for depth */
-  transform: translateZ(-10px); 
-  animation-delay: 0.1s;
-}
-
-@keyframes walk {
-  from { transform: rotate(-20deg); }
-  to { transform: rotate(20deg); }
-}
-
-.puppy-tail {
-  position: absolute;
-  width: 4px;
-  height: 15px;
-  background: #d35400;
-  left: -2px;
-  top: 5px;
+.cat-leg {
+  width: 5px;
+  height: 8px;
+  background: #2d3436;
   border-radius: 2px;
-  transform-origin: bottom;
-  animation: wag 0.2s infinite alternate;
+  animation: pounce 0.3s infinite alternate;
 }
 
-@keyframes wag {
-  from { transform: rotate(-30deg); }
-  to { transform: rotate(30deg); }
+.cat-leg:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+@keyframes pounce {
+  from {
+    transform: translateY(0);
+  }
+
+  to {
+    transform: translateY(2px);
+  }
+}
+
+/* Behavioral Effects */
+.cat-stain {
+  position: absolute;
+  width: 60px;
+  height: 30px;
+  background: rgba(255, 235, 59, 0.4);
+  /* Yellow "pee" stain */
+  filter: blur(8px);
+  border-radius: 50% 40% 60% 30%;
+  pointer-events: none;
+  z-index: 10;
+  animation: stain-fade 10s forwards;
+}
+
+@keyframes stain-fade {
+  0% {
+    transform: scale(0.1);
+    opacity: 0;
+  }
+
+  10% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  80% {
+    opacity: 0.8;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+.stolen-letter {
+  position: absolute;
+  color: var(--text-primary);
+  font-family: monospace;
+  font-weight: bold;
+  font-size: 16px;
+  pointer-events: none;
+  z-index: 1001;
+  animation: steal 1.5s ease-in forwards;
+}
+
+@keyframes steal {
+  0% {
+    transform: translate(0, 0) rotate(0);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translate(-100px, -100px) rotate(720deg) scale(0);
+    opacity: 0;
+  }
 }
 
 .crunch-msg {
   position: absolute;
-  top: -40px;
+  top: -45px;
   left: 50%;
   transform: translateX(-50%);
-  background: #ffecb3;
-  color: #5d4037;
-  font-family: 'Comic Sans MS', cursive;
-  font-weight: bold;
+  background: #2d3436;
+  color: #fff;
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
   padding: 4px 8px;
-  border-radius: 10px;
-  border: 2px solid #795548;
-  font-size: 12px;
+  border-radius: 4px;
   white-space: nowrap;
-  animation: bounce 0.4s infinite;
+  animation: float-up 2s forwards;
 }
 
-@keyframes bounce {
-  0%, 100% { transform: translateX(-50%) translateY(0); }
-  50% { transform: translateX(-50%) translateY(-5px); }
+@keyframes float-up {
+  0% {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateX(-50%) translateY(-20px);
+    opacity: 0;
+  }
+}
+
+.cat-paw-overlay {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  background: radial-gradient(circle, #2d3436 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 10002;
+  filter: blur(2px);
+  animation: paw-press 0.5s ease-out forwards;
+}
+
+@keyframes paw-press {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+
+  100% {
+    transform: scale(1.2);
+    opacity: 0.8;
+  }
 }
 
 /* Scrollbar for picker */

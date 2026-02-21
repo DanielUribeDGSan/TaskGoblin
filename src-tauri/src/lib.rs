@@ -452,19 +452,11 @@ fn notify_user<R: tauri::Runtime>(app: &tauri::AppHandle<R>, _title: &str, messa
         let _ = window.set_focus();
 
         // 2. Emit the event to the frontend (App.tsx)
+        // Frontend will handle opening and auto-closing with animation
         let _ = window.emit(
             "show-toast",
             serde_json::json!({ "title": _title, "message": message }),
         );
-
-        // 3. Auto-hide the sidebar after a few seconds for background captures
-        let handle = app.clone();
-        tauri::async_runtime::spawn(async move {
-            tokio::time::sleep(tokio::time::Duration::from_millis(3500)).await;
-            if let Some(w) = handle.get_webview_window("main") {
-                let _ = w.hide();
-            }
-        });
     }
 }
 

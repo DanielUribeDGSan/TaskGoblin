@@ -1,17 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 
-interface Patch {
+interface VisualEffect {
     id: number;
     x: number;
     y: number;
+    type: 'stain' | 'letter';
+    content?: string;
 }
 
 const PetAgent = ({ isSidebarVisible }: { isSidebarVisible: boolean }) => {
     const [pos, setPos] = useState({ x: 500, y: 500 });
     const [target, setTarget] = useState({ x: 500, y: 500 });
-    const [isEating, setIsEating] = useState(false);
-    const [patches, setPatches] = useState<Patch[]>([]);
+    const [behavior, setBehavior] = useState<'walking' | 'pouncing' | 'sitting' | 'staining' | 'stalking' | 'hiding'>('walking');
+    const [effects, setEffects] = useState<VisualEffect[]>([]);
+    const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
     const [isFocused, setIsFocused] = useState(document.hasFocus());
     const [isNearSidebar, setIsNearSidebar] = useState(false);
     const isIgnoringCursor = useRef(true);
@@ -28,9 +31,12 @@ const PetAgent = ({ isSidebarVisible }: { isSidebarVisible: boolean }) => {
         };
     }, []);
 
-    // Dynamic click-through logic: if mouse is in sidebar area, let it through
+    // Dynamic click-through logic & Mouse Tracking
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
+            setMousePos({ x: e.clientX, y: e.clientY });
+
+            // Sidebar is typically on the left, up to 440px
             const inSidebar = e.clientX < 440;
             setIsNearSidebar(inSidebar);
 
@@ -41,84 +47,125 @@ const PetAgent = ({ isSidebarVisible }: { isSidebarVisible: boolean }) => {
                 isIgnoringCursor.current = true;
                 invoke("set_ignore_cursor_events", { ignore: true });
             }
+
+            // Randomly start stalking if mouse is moving
+            if (Math.random() < 0.005 && behavior === 'walking') {
+                setBehavior('stalking');
+            }
         };
         globalThis.addEventListener('mousemove', handleMouseMove);
         return () => globalThis.removeEventListener('mousemove', handleMouseMove);
-    }, []);
+    }, [behavior]);
 
-    // Autonomous Movement Logic
+    // Autonomous Movement & Behavior Logic
     useEffect(() => {
         const moveInterval = setInterval(() => {
             const shouldBeHidden = isFocused || isNearSidebar;
-            if (isEating || shouldBeHidden) return;
+            if (shouldBeHidden) return;
+            if (behavior === 'sitting' || behavior === 'staining') return;
 
             setPos(prev => {
-                const dx = target.x - prev.x;
-                const dy = target.y - prev.y;
+                let currentTarget = target;
+                if (behavior === 'stalking' || behavior === 'hiding') {
+                    currentTarget = mousePos;
+                }
+
+                const dx = currentTarget.x - prev.x;
+                const dy = currentTarget.y - prev.y;
                 const dist = Math.hypot(dx, dy);
 
-                if (dist < 10) {
-                    // Reached target, pick new one or eat
-                    if (Math.random() < 0.3) {
-                        setIsEating(true);
-                        setPatches(p => [...p, { id: Date.now(), x: prev.x, y: prev.y }]);
-                        setTimeout(() => setIsEating(false), 800);
+                if (dist < 40 && behavior === 'stalking') {
+                    setBehavior('hiding');
+                    setTimeout(() => setBehavior('walking'), 3000);
+                    return prev;
+                }
+
+                if (dist < 15 && behavior !== 'hiding' && behavior !== 'stalking') {
+                    // Reached target, decide next move
+                    const rand = Math.random();
+                    if (rand < 0.1) {
+                        setBehavior('staining');
+                        const newStain: VisualEffect = { id: Date.now(), x: prev.x, y: prev.y, type: 'stain' };
+                        setEffects(curr => [...curr, newStain]);
+                        setTimeout(() => setBehavior('walking'), 2000);
+                        setTimeout(() => setEffects(curr => curr.filter(e => e.id !== newStain.id)), 10000);
+                    } else if (rand < 0.2) {
+                        setBehavior('pouncing');
+                        const letters = "TASKGOBLIN";
+                        const letter = letters[Math.floor(Math.random() * letters.length)];
+                        const newLetter: VisualEffect = { id: Date.now(), x: prev.x, y: prev.y, type: 'letter', content: letter };
+                        setEffects(curr => [...curr, newLetter]);
+                        setTimeout(() => setBehavior('walking'), 1500);
+                        setTimeout(() => setEffects(curr => curr.filter(e => e.id !== newLetter.id)), 1500);
+                    } else if (rand < 0.3) {
+                        setBehavior('sitting');
+                        setTimeout(() => setBehavior('walking'), 3000);
                     } else {
                         setTarget({
                             x: Math.random() * (globalThis.innerWidth - 100) + 50,
                             y: Math.random() * (globalThis.innerHeight - 100) + 50
                         });
+                        setBehavior('walking');
                     }
                     return prev;
                 }
 
+                const speed = (behavior === 'pouncing' || behavior === 'stalking') ? 6 : 2;
                 return {
-                    x: prev.x + (dx / dist) * 2,
-                    y: prev.y + (dy / dist) * 2
+                    x: prev.x + (dx / dist) * speed,
+                    y: prev.y + (dy / dist) * speed
                 };
             });
-        }, 20);
+        }, 30);
 
         return () => clearInterval(moveInterval);
-    }, [target, isEating, isFocused, isNearSidebar]);
+    }, [target, behavior, isFocused, isNearSidebar, mousePos]);
 
-    // The pet is "shy": it hides when the sidebar is visible, or when you are focused on the app.
     const isHidden = isSidebarVisible || isFocused || isNearSidebar;
     if (isHidden) return null;
 
     return (
         <div className="pet-overlay">
-            {patches.map(p => (
-                <div key={p.id} className="eaten-patch" style={{ left: p.x, top: p.y }} />
+            {effects.map(fx => (
+                <div
+                    key={fx.id}
+                    className={fx.type === 'stain' ? 'cat-stain' : 'stolen-letter'}
+                    style={{ left: fx.x, top: fx.y }}
+                >
+                    {fx.content}
+                </div>
             ))}
 
+            {behavior === 'hiding' && (
+                <div className="cat-paw-overlay" style={{ left: mousePos.x - 20, top: mousePos.y - 20 }} />
+            )}
+
             <div
-                className={`pet-3d-container ${isEating ? 'eating' : ''}`}
+                className={`pet-3d-container ${behavior}`}
                 style={{
                     left: pos.x,
                     top: pos.y,
                     transform: `translate(-50%, -100%) scaleX(${target.x > pos.x ? 1 : -1})`
                 }}
             >
-                {/* 3D-ish Puppy using CSS layers */}
-                <div className="puppy-3d">
-                    <div className="puppy-tail"></div>
-                    <div className="puppy-body">
-                        <div className="puppy-spots"></div>
+                <div className="cat-3d">
+                    <div className="cat-tail"></div>
+                    <div className="cat-body"></div>
+                    <div className="cat-head">
+                        <div className="cat-ears-l"></div>
+                        <div className="cat-ears-r"></div>
+                        <div className="cat-eyes"></div>
                     </div>
-                    <div className="puppy-head">
-                        <div className="puppy-ears-l"></div>
-                        <div className="puppy-ears-r"></div>
-                        <div className="puppy-eyes"></div>
-                        <div className="puppy-nose"></div>
-                    </div>
-                    <div className="puppy-legs">
-                        <div className="leg leg-1"></div>
-                        <div className="leg leg-2"></div>
-                        <div className="leg leg-3"></div> {/* Special 3rd leg for depth/requested style */}
+                    <div className="cat-legs">
+                        <div className="cat-leg"></div>
+                        <div className="cat-leg"></div>
                     </div>
                 </div>
-                {isEating && <div className="crunch-msg">CHOMP!</div>}
+                {behavior === 'staining' && <div className="crunch-msg">Oops! 💦</div>}
+                {behavior === 'pouncing' && <div className="crunch-msg">MINE! 🐾</div>}
+                {behavior === 'sitting' && <div className="crunch-msg">PRRR... 😺</div>}
+                {behavior === 'stalking' && <div className="crunch-msg">ACECHANDO... 👁️</div>}
+                {behavior === 'hiding' && <div className="crunch-msg">¡TE TENGO! 🐾</div>}
             </div>
         </div>
     );

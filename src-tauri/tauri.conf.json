@@ -15,8 +15,8 @@
       {
         "title": "TaskGoblin",
         "width": 440,
-        "height": 820,
-        "resizable": false,
+        "height": 640,
+        "resizable": true,
         "visible": true,
         "hiddenTitle": false,
         "decorations": false,

@@ -34,6 +34,10 @@ const CloseIcon = () => (
   <img src="/icon/close.gif" alt="Move Mouse" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
 );
 
+const ScreenshotIcon = () => (
+  <img src="/icon/copy.gif" alt="Screenshot" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
+);
+
 interface Contact {
   name: string;
   phone: string;
@@ -256,6 +260,14 @@ function App() {
     const unlistenToast = listen<{ message: string; title: string }>("show-toast", (event) => {
       setIsSidebarOpen(true); // Open sidebar automatically for the alert
       showToast(event.payload.message);
+
+      // Auto-close after 3.5 seconds
+      setTimeout(() => {
+        setIsSidebarOpen(false);
+        setTimeout(async () => {
+          try { await invoke('hide_window'); } catch (e) { }
+        }, 600); // Match CSS animation duration
+      }, 3500);
     });
 
     return () => {
@@ -276,10 +288,12 @@ function App() {
         setIsSidebarOpen(false); // Auto-hide on start
       } else {
         setIsSidebarOpen(true); // Restore on stop
+        // Force window to be interactive again
+        await invoke("set_ignore_cursor_events", { ignore: false });
       }
-      showToast(newMode ? "Pet activated! 🐶" : "Pet is resting... 🏠");
+      showToast(newMode ? "¡Mascota Gato activada! �" : "El gato se fue a dormir... 🏠");
     } catch (err) {
-      showToast("Error toggling pet mode: " + err);
+      showToast("Error toggling cat mode: " + err);
     }
   };
 
@@ -392,38 +406,30 @@ function App() {
   return (
     <div className={`app-wrapper ${isPetMode ? 'pet-mode-active' : ''} ${!isSidebarOpen ? 'sidebar-closed' : ''}`}>
       {isPetMode && !isSidebarOpen && (
-        <>
-          <button
-            className="floating-restore-btn"
-            onClick={togglePetMode}
-            title="Restore Normal Mode"
-          >
-            <img src="/icon/TaskGoblin.png" alt="TaskGoblin" style={{ width: '28px', height: '28px', borderRadius: '6px' }} />
-          </button>
-
-          <button
-            className="floating-toggle"
-            onClick={() => setIsSidebarOpen(true)}
-            title="Show Sidebar"
-          >
-            <PetIcon />
-          </button>
-        </>
+        <button
+          className="floating-restore-btn"
+          onClick={() => {
+            console.log("Restore button clicked");
+            togglePetMode();
+          }}
+          title="Desactivar Gato y Abrir App"
+          style={{ zIndex: 10000, pointerEvents: 'auto' }}
+        >
+          <img src="/icon/TaskGoblin.png" alt="TaskGoblin" style={{ width: '28px', height: '28px', borderRadius: '6px' }} />
+        </button>
       )}
 
       <div className="sidebar-content">
-        <div className="top-header">
+        <div className="sidebar-header" data-tauri-drag-region>
           <div
-            style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
-            onClick={() => {
-              if (isPetMode) {
-                togglePetMode(); // This will deactivate and open sidebar
-              }
-            }}
+            className="logo-section"
+            onClick={() => setActiveTab("Main")}
+            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+            data-tauri-drag-region
           >
-            <img src="/icon/TaskGoblin.png" alt="TaskGoblin" className="app-logo" />
-            <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>TaskGoblin</h1>
-            <span style={{ fontSize: '10px', color: 'var(--text-secondary)', marginBottom: '-9px', marginLeft: '-4px' }}>By Daniel Uribe</span>
+            <img src="/icon/TaskGoblin.png" alt="TaskGoblin" className="app-logo" data-tauri-drag-region />
+            <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }} data-tauri-drag-region>TaskGoblin</h1>
+            <span style={{ fontSize: '10px', color: 'var(--text-secondary)', marginBottom: '-9px', marginLeft: '-4px' }} data-tauri-drag-region>Mascota Gato 2.0</span>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
@@ -436,7 +442,7 @@ function App() {
                   } catch (e) {
                     console.error("Failed to hide window", e);
                   }
-                }, 300); // Wait for the CSS animation to play
+                }, 600); // Wait for the new 0.6s CSS animation to play
               }}
               title="Close Sidebar"
             >
@@ -458,8 +464,8 @@ function App() {
         <div className="content-area">
           {activeTab === "Pet" && (
             <div className="wa-form-container">
-              <div className="list-item" onClick={() => setActiveTab("Main")} style={{ marginBottom: '16px', background: 'var(--border-color)', fontWeight: 600 }}>
-                <span style={{ fontSize: '18px', marginRight: '8px', marginBottom: '8px' }}>←</span> Back
+              <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Volver
               </div>
               <h2 style={{ fontSize: '18px', marginBottom: '8px' }}>Puppy Mode 🐶</h2>
               <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
@@ -488,11 +494,11 @@ function App() {
                 </div>
               </div>
 
-              <div className={`list-item ${isPetMode ? "active" : ""}`} onClick={togglePetMode}>
-                <div className="icon" style={{ fontSize: '20px' }}><PetIcon /></div>
-                <span>Pet Mode</span>
-                <div className={`toggle-switch ${isPetMode ? "active" : ""}`}>
-                  <div className="toggle-knob"></div>
+              <div className={`list-item ${isPetMode ? 'active' : ''}`} onClick={togglePetMode}>
+                <div className="icon"><PetIcon /></div>
+                <span>Mascota (Gato Realista)</span>
+                <div className={`toggle-switch ${isPetMode ? 'active' : ''}`}>
+                  <div className="toggle-knob" />
                 </div>
               </div>
 
@@ -501,20 +507,24 @@ function App() {
                 <span>WhatsApp Msg</span>
               </div>
 
+
+              <div className="list-item" onClick={handleExtractText} title="Shortcut: Control+Alt+2">
+                <div className="icon">
+                  <div className="icon"><ScreenshotIcon /></div>
+                </div>
+                <span>Screenshot to Text</span>
+              </div>
+
               <div className="list-item" onClick={handleCloseApps}>
                 <div className="icon"><CloseIcon /></div>
                 <span>Close All Apps</span>
               </div>
 
+
               {/* Added a filler visual structure just to make it look like the long mockup */}
               <div className="section-label" style={{ marginTop: '20px' }}>OTHERS</div>
 
-              <div className="list-item" onClick={handleExtractText} title="Shortcut: Control+Alt+2">
-                <div className="icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="M12 12v9"></path><path d="m8 17 4 4 4-4"></path></svg>
-                </div>
-                <span>Screenshot to Text</span>
-              </div>
+
 
               <div className="list-item">
                 <div className="icon">
@@ -533,8 +543,8 @@ function App() {
 
           {activeTab === "Settings" && (
             <div className="wa-form-container">
-              <div className="list-item" onClick={() => setActiveTab("Main")} style={{ marginBottom: '16px', background: 'var(--border-color)', fontWeight: 600 }}>
-                <span style={{ fontSize: '18px', marginRight: '8px', marginBottom: '8px' }}>←</span> Back
+              <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Volver
               </div>
               <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
                 App configuration and behavior.
@@ -554,8 +564,8 @@ function App() {
 
           {activeTab === "WhatsApp" && (
             <div className="wa-form-container">
-              <div className="list-item" onClick={() => setActiveTab("Main")} style={{ marginBottom: '16px', background: 'var(--border-color)', fontWeight: 600 }}>
-                <span style={{ fontSize: '18px', marginRight: '8px', marginBottom: '8px' }}>←</span> Back
+              <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Volver
               </div>
 
               <ContactPicker
