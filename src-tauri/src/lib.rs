@@ -750,7 +750,7 @@ async fn convert_pdf_to_word(
     window: tauri::WebviewWindow,
     pdf_path: String,
 ) -> Result<String, String> {
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
     use std::process::Command;
     use tauri::Manager;
 
@@ -834,7 +834,19 @@ pdf_file = sys.argv[1]
 docx_file = sys.argv[2]
 try:
     cv = Converter(pdf_file)
-    cv.convert(docx_file, start=0, end=None)
+    # Advanced settings to improve font and position preservation:
+    # - line_margin: helps with vertical spacing detection
+    # - word_margin: helps with horizontal spacing detection
+    # - multi_processing: speeds up large docs
+    cv.convert(
+        docx_file, 
+        start=0, 
+        end=None, 
+        multi_processing=True,
+        line_margin=0.5,
+        word_margin=0.2,
+        char_margin=0.05
+    )
     cv.close()
 except Exception as e:
     print(f"ERROR: {e}")
@@ -950,8 +962,9 @@ pub fn run() {
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             hide_window,
             is_mouse_moving,

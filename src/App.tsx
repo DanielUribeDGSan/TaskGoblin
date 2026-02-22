@@ -8,6 +8,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import PetAgent from './components/PetAgent';
+import ColorExtractor from './components/ColorExtractor';
 import "./App.css";
 
 // SVG Icons can be added here if needed, but we'll use emojis/images for simplicity as per mockup
@@ -41,6 +42,18 @@ const ScreenshotIcon = () => (
 
 const ShutdownIcon = () => (
   <img src="/icon/off.gif" alt="Shutdown" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
+);
+
+const PdfIcon = () => (
+  <img src="/icon/note.gif" alt="PDF" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
+);
+
+const ColorIcon = () => (
+  <img src="/icon/palette.gif" alt="Color" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
+);
+
+const BackIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
 );
 
 interface Contact {
@@ -311,7 +324,7 @@ function App() {
         // Force window to be interactive again
         await invoke("set_ignore_cursor_events", { ignore: false });
       }
-      showToast(newMode ? "¡Mascota Gato activada! �" : "El gato se fue a dormir... 🏠");
+      showToast(newMode ? "cat mode! " : "cat mode off... 🏠");
     } catch (err) {
       showToast("Error toggling cat mode: " + err);
     }
@@ -593,10 +606,10 @@ function App() {
                 </div>
               )}
 
-              {"mascota (gato realista)".includes(appSearchTerm.toLowerCase()) && (
+              {"cat".includes(appSearchTerm.toLowerCase()) && (
                 <div className={`list-item ${isPetMode ? 'active' : ''}`} onClick={togglePetMode}>
                   <div className="icon"><PetIcon /></div>
-                  <span>Mascota</span>
+                  <span>Pet Cat</span> <span className="beta-badge">BETA</span>
                   <div className={`toggle-switch ${isPetMode ? 'active' : ''}`}>
                     <div className="toggle-knob" />
                   </div>
@@ -684,16 +697,21 @@ function App() {
                 <div className="list-item" onClick={handleConvertPdf}>
                   <div className="icon">
                     <div className="icon">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                        <polyline points="14 2 14 8 20 8"></polyline>
-                        <line x1="16" y1="13" x2="8" y2="13"></line>
-                        <line x1="16" y1="17" x2="8" y2="17"></line>
-                        <polyline points="10 9 9 9 8 9"></polyline>
-                      </svg>
+                      <PdfIcon />
                     </div>
                   </div>
                   <span>Convert PDF to Word</span>
+                </div>
+              )}
+
+              {(!appSearchTerm || "color extractor".includes(appSearchTerm.toLowerCase())) && (
+                <div className="list-item" onClick={() => setActiveTab("ColorPicker")}>
+                  <div className="icon">
+                    <div className="icon">
+                      <ColorIcon />
+                    </div>
+                  </div>
+                  <span>Color Extractor</span>
                 </div>
               )}
 
@@ -816,6 +834,15 @@ function App() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {activeTab === "ColorPicker" && (
+            <div className="wa-form-container">
+              <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                <BackIcon /> <span style={{ marginLeft: '8px' }}>Back</span>
+              </div>
+              <ColorExtractor />
             </div>
           )}
 

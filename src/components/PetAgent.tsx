@@ -12,12 +12,15 @@ interface VisualEffect {
 const PetAgent = ({ isSidebarVisible }: { isSidebarVisible: boolean }) => {
     const [pos, setPos] = useState({ x: 500, y: 500 });
     const [target, setTarget] = useState({ x: 500, y: 500 });
-    const [behavior, setBehavior] = useState<'walking' | 'pouncing' | 'sitting' | 'staining' | 'stalking' | 'hiding'>('walking');
+    const [behavior, setBehavior] = useState<'walking' | 'pouncing' | 'sitting' | 'vomiting' | 'stalking' | 'stealing'>('walking');
     const [effects, setEffects] = useState<VisualEffect[]>([]);
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
     const [isFocused, setIsFocused] = useState(document.hasFocus());
     const [isNearSidebar, setIsNearSidebar] = useState(false);
+    const [hasMouse, setHasMouse] = useState(false);
     const isIgnoringCursor = useRef(true);
+    const requestRef = useRef<number>();
+    const lastUpdate = useRef<number>(performance.now());
 
     // Focus tracking
     useEffect(() => {
@@ -40,6 +43,15 @@ const PetAgent = ({ isSidebarVisible }: { isSidebarVisible: boolean }) => {
             const inSidebar = e.clientX < 440;
             setIsNearSidebar(inSidebar);
 
+            // If we have stolen the mouse, we NEVER ignore cursor so we can keep cursor: none
+            if (hasMouse) {
+                if (isIgnoringCursor.current) {
+                    isIgnoringCursor.current = false;
+                    invoke("set_ignore_cursor_events", { ignore: false });
+                }
+                return;
+            }
+
             if (inSidebar && isIgnoringCursor.current) {
                 isIgnoringCursor.current = false;
                 invoke("set_ignore_cursor_events", { ignore: false });
@@ -55,93 +67,138 @@ const PetAgent = ({ isSidebarVisible }: { isSidebarVisible: boolean }) => {
         };
         globalThis.addEventListener('mousemove', handleMouseMove);
         return () => globalThis.removeEventListener('mousemove', handleMouseMove);
-    }, [behavior]);
+    }, [behavior, hasMouse]);
 
-    // Autonomous Movement & Behavior Logic
-    useEffect(() => {
-        const moveInterval = setInterval(() => {
-            const shouldBeHidden = isFocused || isNearSidebar;
-            if (shouldBeHidden) return;
-            if (behavior === 'sitting' || behavior === 'staining') return;
+    // Autonomous Movement & Behavior Logic (Smooth 60fps)
+    const animate = (time: number) => {
+        const deltaTime = time - lastUpdate.current;
+        lastUpdate.current = time;
 
-            setPos(prev => {
-                let currentTarget = target;
-                if (behavior === 'stalking' || behavior === 'hiding') {
-                    currentTarget = mousePos;
-                }
+        const shouldPause = isFocused || isNearSidebar;
+        if (shouldPause && !hasMouse) {
+            requestRef.current = requestAnimationFrame(animate);
+            return;
+        }
 
-                const dx = currentTarget.x - prev.x;
-                const dy = currentTarget.y - prev.y;
-                const dist = Math.hypot(dx, dy);
+        if (behavior === 'sitting' || behavior === 'vomiting') {
+            requestRef.current = requestAnimationFrame(animate);
+            return;
+        }
 
-                if (dist < 40 && behavior === 'stalking') {
-                    setBehavior('hiding');
-                    setTimeout(() => setBehavior('walking'), 3000);
-                    return prev;
-                }
+        setPos(prev => {
+            let currentTarget = target;
+            if (behavior === 'stalking') {
+                currentTarget = mousePos;
+            } else if (hasMouse && behavior === 'stealing') {
+                // Run away to a corner!
+                currentTarget = target;
+            }
 
-                if (dist < 15 && behavior !== 'hiding' && behavior !== 'stalking') {
-                    // Reached target, decide next move
-                    const rand = Math.random();
-                    if (rand < 0.1) {
-                        setBehavior('staining');
-                        const newStain: VisualEffect = { id: Date.now(), x: prev.x, y: prev.y, type: 'stain' };
-                        setEffects(curr => [...curr, newStain]);
-                        setTimeout(() => setBehavior('walking'), 2000);
-                        setTimeout(() => setEffects(curr => curr.filter(e => e.id !== newStain.id)), 10000);
-                    } else if (rand < 0.2) {
-                        setBehavior('pouncing');
-                        const letters = "TASKGOBLIN";
-                        const letter = letters[Math.floor(Math.random() * letters.length)];
-                        const newLetter: VisualEffect = { id: Date.now(), x: prev.x, y: prev.y, type: 'letter', content: letter };
-                        setEffects(curr => [...curr, newLetter]);
-                        setTimeout(() => setBehavior('walking'), 1500);
-                        setTimeout(() => setEffects(curr => curr.filter(e => e.id !== newLetter.id)), 1500);
-                    } else if (rand < 0.3) {
-                        setBehavior('sitting');
-                        setTimeout(() => setBehavior('walking'), 3000);
-                    } else {
-                        setTarget({
-                            x: Math.random() * (globalThis.innerWidth - 100) + 50,
-                            y: Math.random() * (globalThis.innerHeight - 100) + 50
-                        });
+            const dx = currentTarget.x - prev.x;
+            const dy = currentTarget.y - prev.y;
+            const dist = Math.hypot(dx, dy);
+
+            if (dist < 40 && behavior === 'stalking') {
+                // GOTCHA! Steal mouse?
+                const shouldSteal = Math.random() < 0.3;
+                if (shouldSteal) {
+                    setBehavior('stealing');
+                    setHasMouse(true);
+                    setTarget({
+                        x: Math.random() < 0.5 ? -100 : globalThis.innerWidth + 100,
+                        y: Math.random() * globalThis.innerHeight
+                    });
+                    setTimeout(() => {
+                        setHasMouse(false);
                         setBehavior('walking');
-                    }
-                    return prev;
+                        // Restore ignore-cursor logic in next mouse move
+                    }, 5000);
+                } else {
+                    setBehavior('walking');
+                    setTarget({
+                        x: Math.random() * (globalThis.innerWidth - 100) + 50,
+                        y: Math.random() * (globalThis.innerHeight - 100) + 50
+                    });
                 }
+                return prev;
+            }
 
-                const speed = (behavior === 'pouncing' || behavior === 'stalking') ? 6 : 2;
+            if (dist < 15 && behavior !== 'stealing' && behavior !== 'stalking') {
+                // Reached target, decide next move
+                const rand = Math.random();
+                if (rand < 0.05) { // Hairball!
+                    setBehavior('vomiting');
+                    const newHairball: VisualEffect = {
+                        id: Date.now(),
+                        x: prev.x - 100,
+                        y: prev.y - 100,
+                        type: 'stain'
+                    };
+                    setEffects(curr => [...curr, newHairball]);
+                    setTimeout(() => setBehavior('walking'), 3000);
+                    setTimeout(() => setEffects(curr => curr.filter(e => e.id !== newHairball.id)), 8000);
+                } else if (rand < 0.15) {
+                    setBehavior('pouncing');
+                    const letters = "TASKGOBLIN";
+                    const letter = letters[Math.floor(Math.random() * letters.length)];
+                    const newLetter: VisualEffect = { id: Date.now(), x: prev.x, y: prev.y, type: 'letter', content: letter };
+                    setEffects(curr => [...curr, newLetter]);
+                    setTimeout(() => setBehavior('walking'), 1500);
+                    setTimeout(() => setEffects(curr => curr.filter(e => e.id !== newLetter.id)), 1500);
+                } else if (rand < 0.25) {
+                    setBehavior('sitting');
+                    setTimeout(() => setBehavior('walking'), 4000);
+                } else {
+                    setTarget({
+                        x: Math.random() * (globalThis.innerWidth - 100) + 50,
+                        y: Math.random() * (globalThis.innerHeight - 100) + 50
+                    });
+                    setBehavior('walking');
+                }
+                return prev;
+            }
+
+            // Calculate movement
+            let speed = (behavior === 'pouncing' || behavior === 'stalking' || behavior === 'stealing') ? 0.3 : 0.1;
+            // Frame-rate independent move
+            const moveAmount = speed * deltaTime;
+
+            if (dist > 0) {
                 return {
-                    x: prev.x + (dx / dist) * speed,
-                    y: prev.y + (dy / dist) * speed
+                    x: prev.x + (dx / dist) * moveAmount,
+                    y: prev.y + (dy / dist) * moveAmount
                 };
-            });
-        }, 30);
+            }
+            return prev;
+        });
 
-        return () => clearInterval(moveInterval);
-    }, [target, behavior, isFocused, isNearSidebar, mousePos]);
+        requestRef.current = requestAnimationFrame(animate);
+    };
 
-    const isHidden = isSidebarVisible || isFocused || isNearSidebar;
+    useEffect(() => {
+        requestRef.current = requestAnimationFrame(animate);
+        return () => {
+            if (requestRef.current) cancelAnimationFrame(requestRef.current);
+        };
+    }, [target, behavior, isFocused, isNearSidebar, mousePos, hasMouse]);
+
+    const isHidden = (isSidebarVisible || isFocused || isNearSidebar) && !hasMouse;
     if (isHidden) return null;
 
     return (
-        <div className="pet-overlay">
+        <div className={`pet-overlay ${hasMouse ? 'stealing-mouse' : ''}`}>
             {effects.map(fx => (
                 <div
                     key={fx.id}
-                    className={fx.type === 'stain' ? 'cat-stain' : 'stolen-letter'}
+                    className={fx.type === 'stain' ? 'pet-hairball' : 'stolen-letter'}
                     style={{ left: fx.x, top: fx.y }}
                 >
                     {fx.content}
                 </div>
             ))}
 
-            {behavior === 'hiding' && (
-                <div className="cat-paw-overlay" style={{ left: mousePos.x - 20, top: mousePos.y - 20 }} />
-            )}
-
             <div
-                className={`pet-3d-container ${behavior}`}
+                className={`pet-3d-container ${behavior} ${hasMouse ? 'carrying' : ''}`}
                 style={{
                     left: pos.x,
                     top: pos.y,
@@ -155,17 +212,20 @@ const PetAgent = ({ isSidebarVisible }: { isSidebarVisible: boolean }) => {
                         <div className="cat-ears-l"></div>
                         <div className="cat-ears-r"></div>
                         <div className="cat-eyes"></div>
+                        {hasMouse && (
+                            <div className="stolen-mouse-icon">🖱️</div>
+                        )}
                     </div>
                     <div className="cat-legs">
                         <div className="cat-leg"></div>
                         <div className="cat-leg"></div>
                     </div>
                 </div>
-                {behavior === 'staining' && <div className="crunch-msg">Oops! 💦</div>}
+                {behavior === 'vomiting' && <div className="crunch-msg">*GULP* bleh! 🤮</div>}
                 {behavior === 'pouncing' && <div className="crunch-msg">MINE! 🐾</div>}
-                {behavior === 'sitting' && <div className="crunch-msg">PRRR... 😺</div>}
-                {behavior === 'stalking' && <div className="crunch-msg">ACECHANDO... 👁️</div>}
-                {behavior === 'hiding' && <div className="crunch-msg">¡TE TENGO! 🐾</div>}
+                {behavior === 'sitting' && <div className="crunch-msg">Zzz... 😴</div>}
+                {behavior === 'stalking' && <div className="crunch-msg">STALKING... 👁️</div>}
+                {behavior === 'stealing' && <div className="crunch-msg">COFFEE TIME! ☕️</div>}
             </div>
         </div>
     );
