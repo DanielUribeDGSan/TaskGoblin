@@ -11,6 +11,7 @@ use tokio::sync::Mutex;
 struct AppState {
     mouse_moving: Mutex<bool>,
     is_pet_mode: Mutex<bool>,
+    is_paint_mode: Mutex<bool>,
     is_dialog_open: Mutex<bool>,
     shutdown_cancel_tx: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
     shutdown_target: Mutex<Option<u64>>,
@@ -263,6 +264,49 @@ async fn toggle_pet_mode(
     #[cfg(not(target_os = "macos"))]
     {
         Err("Pet mode not supported on this OS".to_string())
+    }
+}
+
+#[tauri::command]
+async fn toggle_paint_mode(
+    window: tauri::Window,
+    active: bool,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    {
+        let mut paint_mode = state.is_paint_mode.lock().await;
+        *paint_mode = active;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if active {
+            // Make full screen and ignore mouse initially (or not?)
+            // For painting, we WANT to capture mouse if we are drawing.
+            // But we need to be able to click through to other apps if not drawing?
+            // Usually, paint modes capture everything.
+            let _ = window.set_resizable(true);
+            let _ = window.maximize();
+            let _ = window.set_always_on_top(true);
+            // We start with ignore false so we can interact with the toolbar
+            let _ = window.set_ignore_cursor_events(false);
+        } else {
+            // Restore sidebar size
+            let _ = window.set_ignore_cursor_events(false);
+            let _ = window.unmaximize();
+            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize {
+                width: 440.0,
+                height: 820.0,
+            }));
+            let _ = window.set_resizable(false);
+            let _ = window.set_always_on_top(false);
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        // On non-macos, maybe just toggle window state if possible
+        Ok(())
     }
 }
 
@@ -976,6 +1020,7 @@ pub fn run() {
             check_accessibility,
             request_accessibility,
             toggle_pet_mode,
+            toggle_paint_mode,
             set_ignore_cursor_events,
             close_all_apps,
             close_leisure_apps,
@@ -995,6 +1040,7 @@ pub fn run() {
             app.manage(AppState {
                 mouse_moving: Mutex::new(false),
                 is_pet_mode: Mutex::new(false),
+                is_paint_mode: Mutex::new(false),
                 is_dialog_open: Mutex::new(false),
                 shutdown_cancel_tx: Mutex::new(None),
                 shutdown_target: Mutex::new(None),
@@ -1077,14 +1123,15 @@ pub fn run() {
                     tauri::WindowEvent::Focused(focused) => {
                         if !focused {
                             let state = app_handle.state::<AppState>();
-                            let (is_pet_mode, is_dialog_open) =
+                            let (is_pet_mode, is_paint_mode, is_dialog_open) =
                                 tauri::async_runtime::block_on(async {
                                     let pm = *state.is_pet_mode.lock().await;
+                                    let ptm = *state.is_paint_mode.lock().await;
                                     let ido = *state.is_dialog_open.lock().await;
-                                    (pm, ido)
+                                    (pm, ptm, ido)
                                 });
 
-                            if !is_pet_mode && !is_dialog_open {
+                            if !is_pet_mode && !is_paint_mode && !is_dialog_open {
                                 let _ = window_clone.hide();
                             }
                         }

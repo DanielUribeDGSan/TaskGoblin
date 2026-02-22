@@ -9,6 +9,7 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import PetAgent from './components/PetAgent';
 import ColorExtractor from './components/ColorExtractor';
+import PaintBoard from './components/PaintBoard';
 import "./App.css";
 
 // SVG Icons can be added here if needed, but we'll use emojis/images for simplicity as per mockup
@@ -50,6 +51,10 @@ const PdfIcon = () => (
 
 const ColorIcon = () => (
   <img src="/icon/palette.gif" alt="Color" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
+);
+
+const PaintIcon = () => (
+  <img src="/icon/paint.gif" alt="Paint" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
 );
 
 const BackIcon = () => (
@@ -168,6 +173,7 @@ function App() {
   const [scheduleShutdownPicker, setScheduleShutdownPicker] = useState(false);
   const [scheduleShutdownConfirm, setScheduleShutdownConfirm] = useState<string>(""); // minutes
   const [showMainShutdownPicker, setShowMainShutdownPicker] = useState<boolean>(false);
+  const [isPaintActive, setIsPaintActive] = useState(false);
   const checkAccessibility = async () => {
     try {
       const isEnabled = await invoke("check_accessibility");
@@ -492,557 +498,583 @@ function App() {
   };
 
   return (
-    <div className={`app-wrapper ${isPetMode ? 'pet-mode-active' : ''} ${!isSidebarOpen ? 'sidebar-closed' : ''}`}>
-      {isPetMode && !isSidebarOpen && (
-        <button
-          className="floating-restore-btn"
-          onClick={() => {
-            console.log("Restore button clicked");
-            togglePetMode();
-          }}
-          title="Desactivar Gato y Abrir App"
-          style={{ zIndex: 10000, pointerEvents: 'auto' }}
-        >
-          <img src="/icon/TaskGoblin.png" alt="TaskGoblin" style={{ width: '28px', height: '28px', borderRadius: '6px' }} />
-        </button>
+    <div className="app-root">
+      {isPaintActive && (
+        <PaintBoard
+          onToggleSidebar={setIsSidebarOpen}
+          onClose={() => setIsPaintActive(false)}
+        />
       )}
-
-      <div className="sidebar-content" data-tauri-drag-region>
-        {closeAppsConfirm && (
-          <div className="confirm-overlay" onClick={() => setCloseAppsConfirm(null)}>
-            <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
-              <p className="confirm-message">
-                {closeAppsConfirm === "all" && "Are you sure you want to close all open apps?"}
-                {closeAppsConfirm === "leisure" && "Are you sure you want to close leisure apps (Spotify, Netflix, Discord, etc.)?"}
-                {closeAppsConfirm === "heavy" && "Are you sure you want to close heavy apps (Chrome, Docker, IDEs, etc.)?"}
-              </p>
-              <div className="confirm-actions">
-                <button type="button" className="confirm-btn confirm-btn-cancel" onClick={() => setCloseAppsConfirm(null)}>
-                  Cancel
-                </button>
-                <button type="button" className="confirm-btn confirm-btn-yes" onClick={handleCloseApps}>
-                  Yes
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-        {/* The schedule shutdown confirm modal was removed to avoid conflicting with the inline input field. */}
-        <div className="sidebar-header" data-tauri-drag-region>
-          <div
-            className="logo-section"
-            onClick={() => setActiveTab("Main")}
-            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
-            data-tauri-drag-region
+      <div
+        className={`app-wrapper ${!isSidebarOpen ? 'sidebar-closed' : ''} ${isPetMode ? 'pet-mode-active' : ''} ${isPaintActive ? 'paint-mode-active' : ''}`}
+        style={{ pointerEvents: 'auto' }}
+      >
+        {isPetMode && !isSidebarOpen && (
+          <button
+            className="floating-restore-btn"
+            onClick={() => {
+              console.log("Restore button clicked");
+              togglePetMode();
+            }}
+            title="Desactivar Gato y Abrir App"
+            style={{ zIndex: 10000, pointerEvents: 'auto' }}
           >
-            <img src="/icon/TaskGoblin.png" alt="TaskGoblin" className="app-logo" data-tauri-drag-region />
-            <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }} data-tauri-drag-region>TaskGoblin</h1>
-            <span style={{ fontSize: '10px', color: 'var(--text-secondary)', marginBottom: '-9px', marginLeft: '-4px' }} data-tauri-drag-region>by Daniel Uribe</span>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              className="theme-toggle-btn"
-              onClick={() => {
-                setIsSidebarOpen(false);
-                setTimeout(async () => {
-                  try {
-                    await invoke('hide_window');
-                  } catch (e) {
-                    console.error("Failed to hide window", e);
-                  }
-                }, 600); // Wait for the new 0.6s CSS animation to play
-              }}
-              title="Close Sidebar"
-            >
-              <span style={{ fontSize: '18px' }}>×</span>
-            </button>
-            <button className="theme-toggle-btn" onClick={() => setIsDarkMode(!isDarkMode)}>
-              {isDarkMode ? <LightModeIcon /> : <DarkModeIcon />}
-            </button>
-          </div>
-        </div>
-
-        {activeTab === "Main" && (
-          <div style={{ padding: '0 16px', marginTop: '4px', marginBottom: '16px' }} data-tauri-drag-region>
-            <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '10px 14px', gap: '8px' }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <input type="text" placeholder="Search" style={{ border: 'none', background: 'transparent', padding: 0, margin: 0, outline: 'none', width: '100%', fontSize: '14px', color: 'var(--text-primary)', boxShadow: 'none' }} value={appSearchTerm} onChange={(e) => setAppSearchTerm(e.target.value)} className="no-focus-input" />
-            </div>
-          </div>
+            <img src="/icon/TaskGoblin.png" alt="TaskGoblin" style={{ width: '28px', height: '28px', borderRadius: '6px' }} />
+          </button>
         )}
 
-        <div className="content-area" data-tauri-drag-region>
-          {activeTab === "Pet" && (
-            <div className="wa-form-container">
-              <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
-                <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Volver
-              </div>
-              <h2 style={{ fontSize: '18px', marginBottom: '8px' }}>Puppy Mode 🐶</h2>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
-                Activate a gluttonous puppy that travels the screen eating fragments.
-              </p>
 
+
+        <div className={`sidebar-content ${isPaintActive ? 'hide-for-paint' : ''}`} data-tauri-drag-region>
+          {closeAppsConfirm && (
+            <div className="confirm-overlay" onClick={() => setCloseAppsConfirm(null)}>
+              <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+                <p className="confirm-message">
+                  {closeAppsConfirm === "all" && "Are you sure you want to close all open apps?"}
+                  {closeAppsConfirm === "leisure" && "Are you sure you want to close leisure apps (Spotify, Netflix, Discord, etc.)?"}
+                  {closeAppsConfirm === "heavy" && "Are you sure you want to close heavy apps (Chrome, Docker, IDEs, etc.)?"}
+                </p>
+                <div className="confirm-actions">
+                  <button type="button" className="confirm-btn confirm-btn-cancel" onClick={() => setCloseAppsConfirm(null)}>
+                    Cancel
+                  </button>
+                  <button type="button" className="confirm-btn confirm-btn-yes" onClick={handleCloseApps}>
+                    Yes
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          {/* The schedule shutdown confirm modal was removed to avoid conflicting with the inline input field. */}
+          <div className="sidebar-header" data-tauri-drag-region>
+            <div
+              className="logo-section"
+              onClick={() => setActiveTab("Main")}
+              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+              data-tauri-drag-region
+            >
+              <img src="/icon/TaskGoblin.png" alt="TaskGoblin" className="app-logo" data-tauri-drag-region />
+              <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }} data-tauri-drag-region>TaskGoblin</h1>
+              <span style={{ fontSize: '10px', color: 'var(--text-secondary)', marginBottom: '-9px', marginLeft: '-4px' }} data-tauri-drag-region>by Daniel Uribe</span>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
               <button
-                className={`wa-submit-btn ${isPetMode ? 'active' : ''}`}
-                onClick={togglePetMode}
-                style={{ padding: '12px', background: isPetMode ? '#8c7ae6' : 'rgba(255,255,255,0.05)' }}
+                className="theme-toggle-btn"
+                onClick={() => {
+                  setIsSidebarOpen(false);
+                  setTimeout(async () => {
+                    try {
+                      await invoke('hide_window');
+                    } catch (e) {
+                      console.error("Failed to hide window", e);
+                    }
+                  }, 600); // Wait for the new 0.6s CSS animation to play
+                }}
+                title="Close Sidebar"
               >
-                {isPetMode ? "🛑 Deactivate Puppy" : "🚀 Activate Puppy"}
+                <span style={{ fontSize: '18px' }}>×</span>
               </button>
+              <button className="theme-toggle-btn" onClick={() => setIsDarkMode(!isDarkMode)}>
+                {isDarkMode ? <LightModeIcon /> : <DarkModeIcon />}
+              </button>
+            </div>
+          </div>
+
+          {activeTab === "Main" && (
+            <div style={{ padding: '0 16px', marginTop: '4px', marginBottom: '16px' }} data-tauri-drag-region>
+              <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '10px 14px', gap: '8px' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" placeholder="Search" style={{ border: 'none', background: 'transparent', padding: 0, margin: 0, outline: 'none', width: '100%', fontSize: '14px', color: 'var(--text-primary)', boxShadow: 'none' }} value={appSearchTerm} onChange={(e) => setAppSearchTerm(e.target.value)} className="no-focus-input" />
+              </div>
             </div>
           )}
 
-          {activeTab === "Main" && (
-            <div data-tauri-drag-region style={{ flex: 1 }}>
-              {"main".includes(appSearchTerm.toLowerCase()) && <div className="section-label" data-tauri-drag-region>MAIN</div>}
-
-              {"move mouse".includes(appSearchTerm.toLowerCase()) && (
-                <div className={`list-item ${isMouseMoving ? "active" : ""}`} onClick={handleToggleMouse}>
-                  <div className="icon"><MouseIcon /></div>
-                  <span>Move Mouse</span>
-                  <div className={`toggle-switch ${isMouseMoving ? "active" : ""}`}>
-                    <div className="toggle-knob"></div>
-                  </div>
+          <div className="content-area" data-tauri-drag-region>
+            {activeTab === "Pet" && (
+              <div className="wa-form-container">
+                <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                  <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Volver
                 </div>
-              )}
+                <h2 style={{ fontSize: '18px', marginBottom: '8px' }}>Puppy Mode 🐶</h2>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+                  Activate a gluttonous puppy that travels the screen eating fragments.
+                </p>
 
-              {"cat".includes(appSearchTerm.toLowerCase()) && (
-                <div className={`list-item ${isPetMode ? 'active' : ''}`} onClick={togglePetMode}>
-                  <div className="icon"><PetIcon /></div>
-                  <span>Pet Cat</span> <span className="beta-badge">BETA</span>
-                  <div className={`toggle-switch ${isPetMode ? 'active' : ''}`}>
-                    <div className="toggle-knob" />
-                  </div>
-                </div>
-              )}
+                <button
+                  className={`wa-submit-btn ${isPetMode ? 'active' : ''}`}
+                  onClick={togglePetMode}
+                  style={{ padding: '12px', background: isPetMode ? '#8c7ae6' : 'rgba(255,255,255,0.05)' }}
+                >
+                  {isPetMode ? "🛑 Deactivate Puppy" : "🚀 Activate Puppy"}
+                </button>
+              </div>
+            )}
 
-              {"whatsapp msg".includes(appSearchTerm.toLowerCase()) && (
-                <div className="list-item" onClick={() => { setActiveTab("WhatsApp"); setAppSearchTerm(""); }}>
-                  <div className="icon"><MsgIcon /></div>
-                  <span>WhatsApp Msg</span>
-                </div>
-              )}
+            {activeTab === "Main" && (
+              <div data-tauri-drag-region style={{ flex: 1 }}>
+                {"main".includes(appSearchTerm.toLowerCase()) && <div className="section-label" data-tauri-drag-region>MAIN</div>}
 
-              {"screenshot to text".includes(appSearchTerm.toLowerCase()) && (
-                <div className="list-item" onClick={handleExtractText} title="Shortcut: Control+Alt+2">
-                  <div className="icon">
-                    <div className="icon"><ScreenshotIcon /></div>
-                  </div>
-                  <span>Screenshot to Text</span>
-                </div>
-              )}
-
-              {"close all apps".includes(appSearchTerm.toLowerCase()) && (
-                <div className="list-item" onClick={() => setCloseAppsConfirm("all")}>
-                  <div className="icon">
-                    <div className="icon"><CloseIcon /></div>
-                  </div>
-                  <span>Close All Apps</span>
-                </div>
-              )}
-
-              {"schedule shutdown".includes(appSearchTerm.toLowerCase()) && (
-                <>
-                  <div className="list-item" onClick={() => setShowMainShutdownPicker(!showMainShutdownPicker)}>
-                    <div className="icon">
-                      <div className="icon"><ShutdownIcon /></div>
+                {"move mouse".includes(appSearchTerm.toLowerCase()) && (
+                  <div className={`list-item ${isMouseMoving ? "active" : ""}`} onClick={handleToggleMouse}>
+                    <div className="icon"><MouseIcon /></div>
+                    <span>Move Mouse</span>
+                    <div className={`toggle-switch ${isMouseMoving ? "active" : ""}`}>
+                      <div className="toggle-knob"></div>
                     </div>
-                    <span>Schedule Shutdown</span>
                   </div>
+                )}
 
-                  {showMainShutdownPicker && (
-                    <div className="profile-shutdown-picker" style={{ padding: '0 16px 12px 16px', marginTop: 0, borderTop: 'none' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                        <span className="profile-shutdown-label" style={{ margin: 0 }}>Shut down in (minutes):</span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowMainShutdownPicker(false);
-                            setScheduleShutdownConfirm("");
-                          }}
-                          style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}
-                          title="Close"
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                        </button>
+                {"cat".includes(appSearchTerm.toLowerCase()) && (
+                  <div className={`list-item ${isPetMode ? 'active' : ''}`} onClick={togglePetMode}>
+                    <div className="icon"><PetIcon /></div>
+                    <span>Pet Cat</span> <span className="beta-badge">BETA</span>
+                    <div className={`toggle-switch ${isPetMode ? 'active' : ''}`}>
+                      <div className="toggle-knob" />
+                    </div>
+                  </div>
+                )}
+
+                {"whatsapp msg".includes(appSearchTerm.toLowerCase()) && (
+                  <div className="list-item" onClick={() => { setActiveTab("WhatsApp"); setAppSearchTerm(""); }}>
+                    <div className="icon"><MsgIcon /></div>
+                    <span>WhatsApp Msg</span>
+                  </div>
+                )}
+
+                {"screenshot to text".includes(appSearchTerm.toLowerCase()) && (
+                  <div className="list-item" onClick={handleExtractText} title="Shortcut: Control+Alt+2">
+                    <div className="icon">
+                      <div className="icon"><ScreenshotIcon /></div>
+                    </div>
+                    <span>Screenshot to Text</span>
+                  </div>
+                )}
+
+                {"close all apps".includes(appSearchTerm.toLowerCase()) && (
+                  <div className="list-item" onClick={() => setCloseAppsConfirm("all")}>
+                    <div className="icon">
+                      <div className="icon"><CloseIcon /></div>
+                    </div>
+                    <span>Close All Apps</span>
+                  </div>
+                )}
+
+                {"schedule shutdown".includes(appSearchTerm.toLowerCase()) && (
+                  <>
+                    <div className="list-item" onClick={() => setShowMainShutdownPicker(!showMainShutdownPicker)}>
+                      <div className="icon">
+                        <div className="icon"><ShutdownIcon /></div>
                       </div>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span>Schedule Shutdown</span>
+                    </div>
+
+                    {showMainShutdownPicker && (
+                      <div className="profile-shutdown-picker" style={{ padding: '0 16px 12px 16px', marginTop: 0, borderTop: 'none' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                          <span className="profile-shutdown-label" style={{ margin: 0 }}>Shut down in (minutes):</span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowMainShutdownPicker(false);
+                              setScheduleShutdownConfirm("");
+                            }}
+                            style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}
+                            title="Close"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                          </button>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <input
+                            type="number"
+                            min="1"
+                            placeholder="e.g. 15"
+                            value={scheduleShutdownConfirm}
+                            onChange={(e) => setScheduleShutdownConfirm(e.target.value)}
+                            style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
+                          />
+                          <button
+                            type="button"
+                            className="profile-action-btn"
+                            style={{ margin: 0, padding: '8px 16px', width: 'auto' }}
+                            onClick={() => {
+                              if (scheduleShutdownConfirm && Number.parseInt(scheduleShutdownConfirm) > 0) {
+                                handleScheduleShutdown(Number.parseInt(scheduleShutdownConfirm) * 60);
+                              }
+                            }}
+                          >
+                            Schedule
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {"pdf to word".includes(appSearchTerm.toLowerCase()) && (
+                  <div className="list-item" onClick={handleConvertPdf}>
+                    <div className="icon">
+                      <div className="icon">
+                        <PdfIcon />
+                      </div>
+                    </div>
+                    <span>Convert PDF to Word</span>
+                  </div>
+                )}
+
+                {(!appSearchTerm || "color extractor".includes(appSearchTerm.toLowerCase())) && (
+                  <div className="list-item" onClick={() => setActiveTab("ColorPicker")}>
+                    <div className="icon">
+                      <div className="icon">
+                        <ColorIcon />
+                      </div>
+                    </div>
+                    <span>Color Extractor</span>
+                  </div>
+                )}
+
+                {(!appSearchTerm || "paint".includes(appSearchTerm.toLowerCase()) || "dibujo".includes(appSearchTerm.toLowerCase()) || "pintura".includes(appSearchTerm.toLowerCase())) && (
+                  <div className="list-item" onClick={() => setIsPaintActive(true)}>
+                    <div className="icon">
+                      <div className="icon">
+                        <PaintIcon />
+                      </div>
+                    </div>
+                    <span>Paint</span>
+                  </div>
+                )}
+
+                {(!appSearchTerm || "profiles".includes(appSearchTerm.toLowerCase()) || "modes".includes(appSearchTerm.toLowerCase())) && (
+                  <>
+                    <div className="section-label" style={{ marginTop: '20px' }} data-tauri-drag-region>PROFILES</div>
+                    <div className="list-item" onClick={() => { setActiveTab("Profiles"); setAppSearchTerm(""); }}>
+                      <div className="icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                      </div>
+                      <span>Profiles</span>
+                    </div>
+                  </>
+                )}
+
+                {/* Added a filler visual structure just to make it look like the long mockup */}
+                {"others".includes(appSearchTerm.toLowerCase()) && <div className="section-label" style={{ marginTop: '20px' }} data-tauri-drag-region>OTHERS</div>}
+
+                {"notifications".includes(appSearchTerm.toLowerCase()) && (
+                  <div className="list-item">
+                    <div className="icon">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                    </div>
+                    <span>Notifications</span>
+                  </div>
+                )}
+
+                {"settings".includes(appSearchTerm.toLowerCase()) && (
+                  <div className="list-item" onClick={() => { setActiveTab("Settings"); setAppSearchTerm(""); }}>
+                    <div className="icon">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    </div>
+                    <span>Settings</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "Profiles" && (
+              <div className="wa-form-container profiles-container">
+                <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                  <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Back
+                </div>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+                  Quick modes to close apps and manage notifications.
+                </p>
+
+                <div className="profile-mode-card">
+                  <div className="profile-mode-header">
+                    <span className="profile-mode-icon">💼</span>
+                    <span className="profile-mode-title">Work Mode</span>
+                  </div>
+                  <div className="profile-mode-actions">
+                    <button type="button" className="profile-action-btn" onClick={() => setCloseAppsConfirm("leisure")}>
+                      Close leisure apps
+                    </button>
+                    <button type="button" className="profile-action-btn" onClick={handleOpenFocusSettings}>
+                      Mute notifications
+                    </button>
+                  </div>
+                </div>
+
+                <div className="profile-mode-card">
+                  <div className="profile-mode-header">
+                    <span className="profile-mode-icon">🎮</span>
+                    <span className="profile-mode-title">Gaming Mode</span>
+                  </div>
+                  <div className="profile-mode-actions">
+                    <button type="button" className="profile-action-btn" onClick={() => setCloseAppsConfirm("heavy")}>
+                      Close heavy apps
+                    </button>
+                    <button type="button" className="profile-action-btn" onClick={handleOpenFocusSettings}>
+                      Disable notifications
+                    </button>
+                  </div>
+                </div>
+
+                <div className="profile-mode-card">
+                  <div className="profile-mode-header">
+                    <span className="profile-mode-icon">🌙</span>
+                    <span className="profile-mode-title">Sleep Mode</span>
+                  </div>
+                  <div className="profile-mode-actions">
+                    <button type="button" className="profile-action-btn" onClick={() => setCloseAppsConfirm("all")}>
+                      Close everything
+                    </button>
+                    <button type="button" className="profile-action-btn" onClick={() => setScheduleShutdownPicker(!scheduleShutdownPicker)}>
+                      Schedule shutdown
+                    </button>
+                  </div>
+                  {scheduleShutdownPicker && (
+                    <div className="profile-shutdown-picker">
+                      <span className="profile-shutdown-label">Shut down in (minutes):</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
                         <input
                           type="number"
                           min="1"
                           placeholder="e.g. 15"
                           value={scheduleShutdownConfirm}
                           onChange={(e) => setScheduleShutdownConfirm(e.target.value)}
-                          style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
+                          style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
                         />
                         <button
                           type="button"
                           className="profile-action-btn"
-                          style={{ margin: 0, padding: '8px 16px', width: 'auto' }}
+                          style={{ margin: 0, justifyContent: 'center' }}
                           onClick={() => {
-                            if (scheduleShutdownConfirm && Number.parseInt(scheduleShutdownConfirm) > 0) {
-                              handleScheduleShutdown(Number.parseInt(scheduleShutdownConfirm) * 60);
+                            if (scheduleShutdownConfirm && parseInt(scheduleShutdownConfirm) > 0) {
+                              handleScheduleShutdown(parseInt(scheduleShutdownConfirm) * 60);
                             }
                           }}
                         >
                           Schedule
                         </button>
                       </div>
-                    </div>
-                  )}
-                </>
-              )}
 
-              {"pdf to word".includes(appSearchTerm.toLowerCase()) && (
-                <div className="list-item" onClick={handleConvertPdf}>
-                  <div className="icon">
-                    <div className="icon">
-                      <PdfIcon />
-                    </div>
-                  </div>
-                  <span>Convert PDF to Word</span>
-                </div>
-              )}
-
-              {(!appSearchTerm || "color extractor".includes(appSearchTerm.toLowerCase())) && (
-                <div className="list-item" onClick={() => setActiveTab("ColorPicker")}>
-                  <div className="icon">
-                    <div className="icon">
-                      <ColorIcon />
-                    </div>
-                  </div>
-                  <span>Color Extractor</span>
-                </div>
-              )}
-
-              {(!appSearchTerm || "profiles".includes(appSearchTerm.toLowerCase()) || "modes".includes(appSearchTerm.toLowerCase())) && (
-                <>
-                  <div className="section-label" style={{ marginTop: '20px' }} data-tauri-drag-region>PROFILES</div>
-                  <div className="list-item" onClick={() => { setActiveTab("Profiles"); setAppSearchTerm(""); }}>
-                    <div className="icon">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                    </div>
-                    <span>Profiles</span>
-                  </div>
-                </>
-              )}
-
-              {/* Added a filler visual structure just to make it look like the long mockup */}
-              {"others".includes(appSearchTerm.toLowerCase()) && <div className="section-label" style={{ marginTop: '20px' }} data-tauri-drag-region>OTHERS</div>}
-
-              {"notifications".includes(appSearchTerm.toLowerCase()) && (
-                <div className="list-item">
-                  <div className="icon">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-                  </div>
-                  <span>Notifications</span>
-                </div>
-              )}
-
-              {"settings".includes(appSearchTerm.toLowerCase()) && (
-                <div className="list-item" onClick={() => { setActiveTab("Settings"); setAppSearchTerm(""); }}>
-                  <div className="icon">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                  </div>
-                  <span>Settings</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === "Profiles" && (
-            <div className="wa-form-container profiles-container">
-              <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
-                <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Back
-              </div>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
-                Quick modes to close apps and manage notifications.
-              </p>
-
-              <div className="profile-mode-card">
-                <div className="profile-mode-header">
-                  <span className="profile-mode-icon">💼</span>
-                  <span className="profile-mode-title">Work Mode</span>
-                </div>
-                <div className="profile-mode-actions">
-                  <button type="button" className="profile-action-btn" onClick={() => setCloseAppsConfirm("leisure")}>
-                    Close leisure apps
-                  </button>
-                  <button type="button" className="profile-action-btn" onClick={handleOpenFocusSettings}>
-                    Mute notifications
-                  </button>
-                </div>
-              </div>
-
-              <div className="profile-mode-card">
-                <div className="profile-mode-header">
-                  <span className="profile-mode-icon">🎮</span>
-                  <span className="profile-mode-title">Gaming Mode</span>
-                </div>
-                <div className="profile-mode-actions">
-                  <button type="button" className="profile-action-btn" onClick={() => setCloseAppsConfirm("heavy")}>
-                    Close heavy apps
-                  </button>
-                  <button type="button" className="profile-action-btn" onClick={handleOpenFocusSettings}>
-                    Disable notifications
-                  </button>
-                </div>
-              </div>
-
-              <div className="profile-mode-card">
-                <div className="profile-mode-header">
-                  <span className="profile-mode-icon">🌙</span>
-                  <span className="profile-mode-title">Sleep Mode</span>
-                </div>
-                <div className="profile-mode-actions">
-                  <button type="button" className="profile-action-btn" onClick={() => setCloseAppsConfirm("all")}>
-                    Close everything
-                  </button>
-                  <button type="button" className="profile-action-btn" onClick={() => setScheduleShutdownPicker(!scheduleShutdownPicker)}>
-                    Schedule shutdown
-                  </button>
-                </div>
-                {scheduleShutdownPicker && (
-                  <div className="profile-shutdown-picker">
-                    <span className="profile-shutdown-label">Shut down in (minutes):</span>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
-                      <input
-                        type="number"
-                        min="1"
-                        placeholder="e.g. 15"
-                        value={scheduleShutdownConfirm}
-                        onChange={(e) => setScheduleShutdownConfirm(e.target.value)}
-                        style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
-                      />
-                      <button
-                        type="button"
-                        className="profile-action-btn"
-                        style={{ margin: 0, justifyContent: 'center' }}
-                        onClick={() => {
-                          if (scheduleShutdownConfirm && parseInt(scheduleShutdownConfirm) > 0) {
-                            handleScheduleShutdown(parseInt(scheduleShutdownConfirm) * 60);
-                          }
-                        }}
-                      >
-                        Schedule
+                      <button type="button" className="profile-action-btn profile-shutdown-cancel" onClick={() => { setScheduleShutdownPicker(false); setScheduleShutdownConfirm(""); }}>
+                        Cancel
                       </button>
                     </div>
+                  )}
+                </div>
+              </div>
+            )}
 
-                    <button type="button" className="profile-action-btn profile-shutdown-cancel" onClick={() => { setScheduleShutdownPicker(false); setScheduleShutdownConfirm(""); }}>
-                      Cancel
-                    </button>
+            {activeTab === "ColorPicker" && (
+              <div className="wa-form-container">
+                <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                  <BackIcon /> <span style={{ marginLeft: '8px' }}>Back</span>
+                </div>
+                <ColorExtractor />
+              </div>
+            )}
+
+            {activeTab === "Settings" && (
+              <div className="wa-form-container">
+                <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                  <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Volver
+                </div>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+                  App configuration and behavior.
+                </p>
+
+                <div className={`list-item ${isAutostartEnabled ? "active" : ""}`} onClick={handleToggleAutostart}>
+                  <div className="icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
+                  </div>
+                  <span>Start on Login</span>
+                  <div className={`toggle-switch ${isAutostartEnabled ? "active" : ""}`}>
+                    <div className="toggle-knob"></div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "WhatsApp" && (
+              <div className="wa-form-container">
+                <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                  <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Volver
+                </div>
+
+                <ContactPicker
+                  contacts={contacts}
+                  onSelect={(c) => {
+                    const cleaned = c.phone.replace(/[^\d+]/g, "");
+                    setWaPhone(cleaned);
+                  }}
+                  currentPhone={waPhone}
+                  onRefresh={async () => {
+                    setIsLoadingContacts(true);
+                    setContactError(null);
+                    try {
+                      const data = await invoke("get_contacts");
+                      setContacts(data as Contact[]);
+                    } catch (err) {
+                      console.error(err);
+                      setContactError(err as string);
+                    } finally {
+                      setIsLoadingContacts(false);
+                    }
+                  }}
+                />
+                {isLoadingContacts && (
+                  <div style={{ textAlign: 'center', padding: '10px', fontSize: '12px', color: 'var(--accent-color)' }}>
+                    ⌛ Fetching your contacts...
                   </div>
                 )}
-              </div>
-            </div>
-          )}
 
-          {activeTab === "ColorPicker" && (
-            <div className="wa-form-container">
-              <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
-                <BackIcon /> <span style={{ marginLeft: '8px' }}>Back</span>
-              </div>
-              <ColorExtractor />
-            </div>
-          )}
-
-          {activeTab === "Settings" && (
-            <div className="wa-form-container">
-              <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
-                <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Volver
-              </div>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
-                App configuration and behavior.
-              </p>
-
-              <div className={`list-item ${isAutostartEnabled ? "active" : ""}`} onClick={handleToggleAutostart}>
-                <div className="icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
+                <label className="wa-form-label" style={{ marginTop: '18px' }}>Contact / Phone Number</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <select
+                    value={countryCode}
+                    onChange={(e) => setCountryCode(e.target.value)}
+                    className="country-select"
+                  >
+                    <option value="+52">🇲🇽 +52</option>
+                    <option value="+1">🇺🇸 +1</option>
+                    <option value="+34">🇪🇸 +34</option>
+                    <option value="+54">🇦🇷 +54</option>
+                    <option value="+57">🇨🇴 +57</option>
+                    <option value="+56">🇨🇱 +56</option>
+                    <option value="+51">🇵🇪 +51</option>
+                    <option value="+44">🇬🇧 +44</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={waPhone}
+                    onChange={e => setWaPhone(e.target.value)}
+                    placeholder="443 123 4567"
+                    style={{ flex: 1 }}
+                  />
                 </div>
-                <span>Start on Login</span>
-                <div className={`toggle-switch ${isAutostartEnabled ? "active" : ""}`}>
-                  <div className="toggle-knob"></div>
-                </div>
-              </div>
-            </div>
-          )}
 
-          {activeTab === "WhatsApp" && (
-            <div className="wa-form-container">
-              <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
-                <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Volver
-              </div>
 
-              <ContactPicker
-                contacts={contacts}
-                onSelect={(c) => {
-                  const cleaned = c.phone.replace(/[^\d+]/g, "");
-                  setWaPhone(cleaned);
-                }}
-                currentPhone={waPhone}
-                onRefresh={async () => {
-                  setIsLoadingContacts(true);
-                  setContactError(null);
-                  try {
-                    const data = await invoke("get_contacts");
-                    setContacts(data as Contact[]);
-                  } catch (err) {
-                    console.error(err);
-                    setContactError(err as string);
-                  } finally {
-                    setIsLoadingContacts(false);
-                  }
-                }}
-              />
-              {isLoadingContacts && (
-                <div style={{ textAlign: 'center', padding: '10px', fontSize: '12px', color: 'var(--accent-color)' }}>
-                  ⌛ Fetching your contacts...
-                </div>
-              )}
 
-              <label className="wa-form-label" style={{ marginTop: '18px' }}>Contact / Phone Number</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <select
-                  value={countryCode}
-                  onChange={(e) => setCountryCode(e.target.value)}
-                  className="country-select"
-                >
-                  <option value="+52">🇲🇽 +52</option>
-                  <option value="+1">🇺🇸 +1</option>
-                  <option value="+34">🇪🇸 +34</option>
-                  <option value="+54">🇦🇷 +54</option>
-                  <option value="+57">🇨🇴 +57</option>
-                  <option value="+56">🇨🇱 +56</option>
-                  <option value="+51">🇵🇪 +51</option>
-                  <option value="+44">🇬🇧 +44</option>
-                </select>
-                <input
-                  type="text"
-                  value={waPhone}
-                  onChange={e => setWaPhone(e.target.value)}
-                  placeholder="443 123 4567"
-                  style={{ flex: 1 }}
+
+
+                {contactError && (
+                  <div style={{ textAlign: 'center', padding: '10px', fontSize: '12px', color: '#ff5555' }}>
+                    ❌ Error: {contactError}
+                  </div>
+                )}
+
+                <label className="wa-form-label" style={{ marginTop: '8px' }}>Message</label>
+                <textarea
+                  value={waMsg}
+                  onChange={e => setWaMsg(e.target.value)}
+                  placeholder="Type your message here..."
+                  style={{ minHeight: '80px', resize: 'vertical' }}
                 />
+
+
+                <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                  <div style={{ flex: 1, position: 'relative' }}>
+                    <label className="wa-form-label">Date</label>
+                    <DatePicker
+                      selected={waDateTime}
+                      onChange={(date: Date | null) => setWaDateTime(date)}
+                      dateFormat="MM/dd/yyyy"
+                      className="custom-datepicker"
+                      minDate={new Date()}
+                      maxDate={new Date(new Date().getFullYear(), 11, 31)}
+                      placeholderText="Select Date"
+                      portalId="root"
+                    />
+                  </div>
+                  <div style={{ flex: 1, position: 'relative' }}>
+                    <label className="wa-form-label">Time</label>
+                    <DatePicker
+                      selected={waDateTime}
+                      onChange={(date: Date | null) => setWaDateTime(date)}
+                      showTimeSelect
+                      showTimeSelectOnly
+                      timeIntervals={1}
+                      timeCaption="Time"
+                      dateFormat="h:mm aa"
+                      className="custom-datepicker"
+                      placeholderText="Select Time"
+                      portalId="root"
+                    />
+                  </div>
+                </div>
+
+                <button className="wa-submit-btn" onClick={handleScheduleWa} style={{ marginTop: '16px' }}>
+                  Schedule
+                </button>
               </div>
-
-
-
-
-
-              {contactError && (
-                <div style={{ textAlign: 'center', padding: '10px', fontSize: '12px', color: '#ff5555' }}>
-                  ❌ Error: {contactError}
-                </div>
-              )}
-
-              <label className="wa-form-label" style={{ marginTop: '8px' }}>Message</label>
-              <textarea
-                value={waMsg}
-                onChange={e => setWaMsg(e.target.value)}
-                placeholder="Type your message here..."
-                style={{ minHeight: '80px', resize: 'vertical' }}
-              />
-
-
-              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                <div style={{ flex: 1, position: 'relative' }}>
-                  <label className="wa-form-label">Date</label>
-                  <DatePicker
-                    selected={waDateTime}
-                    onChange={(date: Date | null) => setWaDateTime(date)}
-                    dateFormat="MM/dd/yyyy"
-                    className="custom-datepicker"
-                    minDate={new Date()}
-                    maxDate={new Date(new Date().getFullYear(), 11, 31)}
-                    placeholderText="Select Date"
-                    portalId="root"
-                  />
-                </div>
-                <div style={{ flex: 1, position: 'relative' }}>
-                  <label className="wa-form-label">Time</label>
-                  <DatePicker
-                    selected={waDateTime}
-                    onChange={(date: Date | null) => setWaDateTime(date)}
-                    showTimeSelect
-                    showTimeSelectOnly
-                    timeIntervals={1}
-                    timeCaption="Time"
-                    dateFormat="h:mm aa"
-                    className="custom-datepicker"
-                    placeholderText="Select Time"
-                    portalId="root"
-                  />
-                </div>
-              </div>
-
-              <button className="wa-submit-btn" onClick={handleScheduleWa} style={{ marginTop: '16px' }}>
-                Schedule
-              </button>
-            </div>
-          )}
-        </div>
-      </div> {/* End of sidebar-content */}
-
-      {toast.visible && (
-        <div className={`toast-notification ${toast.visible ? 'visible' : ''}`}>
-          <span style={{ marginRight: '8px' }}>✨</span>
-          {toast.message}
-        </div>
-      )}
-
-      {isPetMode && <PetAgent isSidebarVisible={isSidebarOpen} />}
-
-      {pdfConversion.active && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.7)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10000,
-          color: 'white',
-          padding: '24px'
-        }}>
-          <div style={{
-            backgroundColor: 'var(--bg-secondary)',
-            padding: '24px',
-            borderRadius: '16px',
-            width: '100%',
-            maxWidth: '300px',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-            border: '1px solid var(--border-color)',
-            textAlign: 'center'
-          }}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>Converting PDF...</h3>
-            <div style={{
-              width: '100%',
-              height: '8px',
-              backgroundColor: 'rgba(255,255,255,0.1)',
-              borderRadius: '4px',
-              overflow: 'hidden',
-              marginBottom: '12px'
-            }}>
-              <div style={{
-                width: `${pdfConversion.progress * 100}%`,
-                height: '100%',
-                backgroundColor: 'var(--accent-color)',
-                transition: 'width 0.3s ease'
-              }} />
-            </div>
-            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
-              {pdfConversion.step}
-            </p>
+            )}
           </div>
-        </div>
-      )}
+        </div> {/* End of sidebar-content */}
+
+        {toast.visible && (
+          <div className={`toast-notification ${toast.visible ? 'visible' : ''}`}>
+            <span style={{ marginRight: '8px' }}>✨</span>
+            {toast.message}
+          </div>
+        )}
+
+        {isPetMode && <PetAgent isSidebarVisible={isSidebarOpen} />}
+
+        {pdfConversion.active && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+            color: 'white',
+            padding: '24px'
+          }}>
+            <div style={{
+              backgroundColor: 'var(--bg-secondary)',
+              padding: '24px',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '300px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              border: '1px solid var(--border-color)',
+              textAlign: 'center'
+            }}>
+              <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>Converting PDF...</h3>
+              <div style={{
+                width: '100%',
+                height: '8px',
+                backgroundColor: 'rgba(255,255,255,0.1)',
+                borderRadius: '4px',
+                overflow: 'hidden',
+                marginBottom: '12px'
+              }}>
+                <div style={{
+                  width: `${pdfConversion.progress * 100}%`,
+                  height: '100%',
+                  backgroundColor: 'var(--accent-color)',
+                  transition: 'width 0.3s ease'
+                }} />
+              </div>
+              <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
+                {pdfConversion.step}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 export default App;
+
+

@@ -1,5 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
+* {
+  box-sizing: border-box;
+}
+
 :root {
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   color: #333333;
@@ -68,9 +72,24 @@ body,
 }
 
 body {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: transparent;
+  position: relative;
+}
+
+.app-root {
+  position: fixed;
+  inset: 0;
   display: flex;
-  place-items: center;
+  align-items: center;
   justify-content: center;
+  pointer-events: none;
+  /* Let clicks pass through to paint UI or others */
+  z-index: 1;
 }
 
 /* Base App Wrapper - The "Card" design */
@@ -78,13 +97,14 @@ body {
   position: relative;
   width: 360px;
   height: 580px;
-  margin: auto;
   background: var(--bg-gradient);
   display: flex;
   flex-direction: column;
   box-shadow: 0 12px 40px var(--shadow-color);
   border-radius: 24px;
   border: 1px solid var(--border-color);
+  pointer-events: auto;
+  /* Active app interaction */
   overflow: hidden;
   transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease;
   transform-origin: top right;
@@ -103,6 +123,20 @@ body {
   border: none !important;
   box-shadow: none !important;
   pointer-events: none;
+  margin: 0;
+}
+
+.paint-mode-active {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  pointer-events: auto;
   margin: 0;
 }
 
@@ -132,11 +166,15 @@ body {
   border-radius: 0;
 }
 
-/* Hide only if NOT in pet mode or if specifically closed */
-.app-wrapper.sidebar-closed:not(.pet-mode-active) {
+/* Hide only if NOT in pet mode, NOT in paint mode, or if specifically closed */
+.app-wrapper.sidebar-closed:not(.pet-mode-active):not(.paint-mode-active) {
   transform: scale(0.85) translateY(-30px);
   opacity: 0;
   pointer-events: none;
+}
+
+.sidebar-content.hide-for-paint {
+  display: none !important;
 }
 
 /* In pet mode, the sidebar-content is what animates, not the whole wrapper */
@@ -706,6 +744,16 @@ body.dark ::-webkit-calendar-picker-indicator {
   transform: translateX(-50%) translateY(0);
   opacity: 1;
   pointer-events: auto;
+}
+
+.preview-canvas {
+  pointer-events: auto;
+  z-index: 5;
+}
+
+.main-canvas {
+  pointer-events: none;
+  z-index: 1;
 }
 
 /* 3D Cat Visuals (Mascota 2.0) */
@@ -1316,6 +1364,25 @@ body.dark ::-webkit-calendar-picker-indicator {
   cursor: default;
 }
 
+.paint-container.tool-eraser .paint-canvas {
+  cursor: cell;
+}
+
+.paint-container.tool-text .paint-canvas {
+  cursor: text;
+}
+
+.paint-container.tool-move .paint-canvas {
+  cursor: grab;
+}
+
+.paint-container.tool-pencil .paint-canvas,
+.paint-container.tool-pen .paint-canvas,
+.paint-container.tool-marker .paint-canvas,
+.paint-container.tool-brush .paint-canvas {
+  cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='black'><path d='M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z'/></svg>") 0 32, crosshair;
+}
+
 .change-img-btn {
   background: transparent;
   border: 1px solid var(--border-color);
@@ -1344,4 +1411,293 @@ body.dark ::-webkit-calendar-picker-indicator {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* Paint Mode Styles */
+.paint-portal-root {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  pointer-events: none;
+  /* Crucial: Let background clicks reach app */
+  isolation: isolate;
+}
+
+.paint-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Toolbar wrapper: perfectly centered without transforms */
+.paint-toolbar-wrapper {
+  position: fixed;
+  top: 24px;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  width: fit-content;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 10001;
+}
+
+.paint-properties-anchor .paint-properties {
+  pointer-events: auto;
+}
+
+.paint-toolbar-wrapper {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10001;
+  pointer-events: none;
+  width: auto;
+  display: flex;
+  justify-content: center;
+}
+
+.paint-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 0 32px;
+  /* Uniform height controlled by height property */
+  background: rgba(28, 28, 30, 0.98);
+  /* Near solid for extreme stability */
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  border-radius: 28px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  pointer-events: auto;
+  min-width: 600px;
+  /* Rigidified */
+  width: 600px;
+  /* Fixed width to prevent any "squashing" */
+  height: 58px;
+  white-space: nowrap;
+  z-index: 10002;
+  cursor: default;
+  transition: none;
+  /* No layout transitions to prevent shifting */
+}
+
+.tool-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 18px;
+  color: #fff;
+}
+
+.tool-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: scale(1.1);
+}
+
+.tool-btn.active {
+  background: #007AFF;
+  color: white;
+}
+
+.tool-btn.danger:hover {
+  background: rgba(255, 59, 48, 0.2);
+  color: #FF3B30;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 4px;
+}
+
+.paint-properties {
+  position: absolute;
+  left: 24px;
+  top: 100px;
+  width: 240px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  pointer-events: auto;
+  /* Active panel */
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  z-index: 10004;
+}
+
+.prop-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prop-section label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.size-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.size-btn {
+  flex: 1;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid #eee;
+  background: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.size-btn.active {
+  background: var(--accent-color, #6c5ce7);
+  color: white;
+  border-color: var(--accent-color, #6c5ce7);
+}
+
+.action-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btns button {
+  flex: 1;
+  height: 40px;
+  border-radius: 10px;
+  border: none;
+  background: #f5f5f7;
+  cursor: pointer;
+  font-size: 18px;
+  transition: all 0.2s;
+}
+
+.action-btns button:hover {
+  background: #e5e5e7;
+  transform: translateY(-1px);
+}
+
+.action-btns button.danger {
+  background: #fff5f5;
+  color: #ff4757;
+}
+
+.action-btns button.danger:hover {
+  background: #ffebeb;
+}
+
+.canvas-text-input {
+  background: transparent;
+  border: 2px dashed rgba(108, 92, 231, 0.4);
+  padding: 8px;
+  margin: 0;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  font-family: inherit;
+  z-index: 10005;
+  /* Above canvases and toolbar */
+  min-width: 120px;
+  min-height: 1.2em;
+  white-space: pre-wrap;
+  /* Allow wrapping in edit mode */
+  pointer-events: auto;
+}
+
+.prop-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prop-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.color-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.color-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.2s ease;
+}
+
+.color-swatch:hover {
+  transform: scale(1.1);
+}
+
+.color-swatch.active {
+  border-color: #fff;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+.paint-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 10000;
+  pointer-events: none;
+  /* Default none */
+}
+
+.paint-canvas.preview-canvas {
+  pointer-events: auto;
+  /* Catch drawing events */
+}
+
+/* The original cursor property was removed from .paint-canvas and is now implicitly handled by tool-specific classes */
+
+.prop-group input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  outline: none;
+}
+
+.prop-group input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  background: #007AFF;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(0, 122, 255, 0.5);
 }
