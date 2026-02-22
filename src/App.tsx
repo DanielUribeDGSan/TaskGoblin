@@ -38,6 +38,10 @@ const ScreenshotIcon = () => (
   <img src="/icon/copy.gif" alt="Screenshot" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
 );
 
+const ShutdownIcon = () => (
+  <img src="/icon/off.gif" alt="Shutdown" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
+);
+
 interface Contact {
   name: string;
   phone: string;
@@ -145,7 +149,10 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isAutostartEnabled, setIsAutostartEnabled] = useState(false);
   const [appSearchTerm, setAppSearchTerm] = useState("");
-
+  const [closeAppsConfirm, setCloseAppsConfirm] = useState<'all' | 'leisure' | 'heavy' | null>(null);
+  const [scheduleShutdownPicker, setScheduleShutdownPicker] = useState(false);
+  const [scheduleShutdownConfirm, setScheduleShutdownConfirm] = useState<string>(""); // minutes
+  const [showMainShutdownPicker, setShowMainShutdownPicker] = useState<boolean>(false);
   const checkAccessibility = async () => {
     try {
       const isEnabled = await invoke("check_accessibility");
@@ -316,13 +323,42 @@ function App() {
   };
 
   const handleCloseApps = async () => {
+    const action = closeAppsConfirm;
+    setCloseAppsConfirm(null);
+    if (!action) return;
     try {
       showToast("Closing applications... 🧹");
-      await invoke("close_all_apps");
-      showToast("All apps closed! ✨");
+      if (action === "all") await invoke("close_all_apps");
+      else if (action === "leisure") await invoke("close_leisure_apps");
+      else if (action === "heavy") await invoke("close_heavy_apps");
+      showToast(action === "all" ? "All apps closed! ✨" : "Apps closed! ✨");
     } catch (err) {
       console.error(err);
-      showToast("Error closing apps: " + err);
+      showToast("Error closing apps: " + String(err));
+    }
+  };
+
+  const handleOpenFocusSettings = async () => {
+    try {
+      await invoke("open_focus_settings");
+      showToast("Opening Focus settings — enable Do Not Disturb there");
+    } catch (err) {
+      console.error(err);
+      showToast("Error opening settings: " + String(err));
+    }
+  };
+
+  const handleScheduleShutdown = async (delaySecs: number) => {
+    setScheduleShutdownConfirm("");
+    setScheduleShutdownPicker(false);
+    setShowMainShutdownPicker(false);
+    try {
+      await invoke("schedule_shutdown", { delaySecs });
+      const mins = Math.round(delaySecs / 60);
+      showToast(`Shutdown scheduled in ${mins} min — keep the app open`);
+    } catch (err) {
+      console.error(err);
+      showToast("Error scheduling shutdown: " + String(err));
     }
   };
 
@@ -421,6 +457,26 @@ function App() {
       )}
 
       <div className="sidebar-content" data-tauri-drag-region>
+        {closeAppsConfirm && (
+          <div className="confirm-overlay" onClick={() => setCloseAppsConfirm(null)}>
+            <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+              <p className="confirm-message">
+                {closeAppsConfirm === "all" && "Are you sure you want to close all open apps?"}
+                {closeAppsConfirm === "leisure" && "Are you sure you want to close leisure apps (Spotify, Netflix, Discord, etc.)?"}
+                {closeAppsConfirm === "heavy" && "Are you sure you want to close heavy apps (Chrome, Docker, IDEs, etc.)?"}
+              </p>
+              <div className="confirm-actions">
+                <button type="button" className="confirm-btn confirm-btn-cancel" onClick={() => setCloseAppsConfirm(null)}>
+                  Cancel
+                </button>
+                <button type="button" className="confirm-btn confirm-btn-yes" onClick={handleCloseApps}>
+                  Yes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* The schedule shutdown confirm modal was removed to avoid conflicting with the inline input field. */}
         <div className="sidebar-header" data-tauri-drag-region>
           <div
             className="logo-section"
@@ -526,10 +582,76 @@ function App() {
               )}
 
               {"close all apps".includes(appSearchTerm.toLowerCase()) && (
-                <div className="list-item" onClick={handleCloseApps}>
-                  <div className="icon"><CloseIcon /></div>
+                <div className="list-item" onClick={() => setCloseAppsConfirm("all")}>
+                  <div className="icon">
+                    <div className="icon"><CloseIcon /></div>
+                  </div>
                   <span>Close All Apps</span>
                 </div>
+              )}
+
+              {"schedule shutdown".includes(appSearchTerm.toLowerCase()) && (
+                <>
+                  <div className="list-item" onClick={() => setShowMainShutdownPicker(!showMainShutdownPicker)}>
+                    <div className="icon">
+                      <div className="icon"><ShutdownIcon /></div>
+                    </div>
+                    <span>Schedule Shutdown</span>
+                  </div>
+
+                  {showMainShutdownPicker && (
+                    <div className="profile-shutdown-picker" style={{ padding: '0 16px 12px 16px', marginTop: 0, borderTop: 'none' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span className="profile-shutdown-label" style={{ margin: 0 }}>Shut down in (minutes):</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowMainShutdownPicker(false);
+                            setScheduleShutdownConfirm("");
+                          }}
+                          style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}
+                          title="Close"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <input
+                          type="number"
+                          min="1"
+                          placeholder="e.g. 15"
+                          value={scheduleShutdownConfirm}
+                          onChange={(e) => setScheduleShutdownConfirm(e.target.value)}
+                          style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
+                        />
+                        <button
+                          type="button"
+                          className="profile-action-btn"
+                          style={{ margin: 0, padding: '8px 16px', width: 'auto' }}
+                          onClick={() => {
+                            if (scheduleShutdownConfirm && parseInt(scheduleShutdownConfirm) > 0) {
+                              handleScheduleShutdown(parseInt(scheduleShutdownConfirm) * 60);
+                            }
+                          }}
+                        >
+                          Schedule
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {(!appSearchTerm || "profiles".includes(appSearchTerm.toLowerCase()) || "modes".includes(appSearchTerm.toLowerCase())) && (
+                <>
+                  <div className="section-label" style={{ marginTop: '20px' }} data-tauri-drag-region>PROFILES</div>
+                  <div className="list-item" onClick={() => { setActiveTab("Profiles"); setAppSearchTerm(""); }}>
+                    <div className="icon">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    </div>
+                    <span>Profiles</span>
+                  </div>
+                </>
               )}
 
               {/* Added a filler visual structure just to make it look like the long mockup */}
@@ -552,6 +674,93 @@ function App() {
                   <span>Settings</span>
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === "Profiles" && (
+            <div className="wa-form-container profiles-container">
+              <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Back
+              </div>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+                Quick modes to close apps and manage notifications.
+              </p>
+
+              <div className="profile-mode-card">
+                <div className="profile-mode-header">
+                  <span className="profile-mode-icon">💼</span>
+                  <span className="profile-mode-title">Work Mode</span>
+                </div>
+                <div className="profile-mode-actions">
+                  <button type="button" className="profile-action-btn" onClick={() => setCloseAppsConfirm("leisure")}>
+                    Close leisure apps
+                  </button>
+                  <button type="button" className="profile-action-btn" onClick={handleOpenFocusSettings}>
+                    Mute notifications
+                  </button>
+                </div>
+              </div>
+
+              <div className="profile-mode-card">
+                <div className="profile-mode-header">
+                  <span className="profile-mode-icon">🎮</span>
+                  <span className="profile-mode-title">Gaming Mode</span>
+                </div>
+                <div className="profile-mode-actions">
+                  <button type="button" className="profile-action-btn" onClick={() => setCloseAppsConfirm("heavy")}>
+                    Close heavy apps
+                  </button>
+                  <button type="button" className="profile-action-btn" onClick={handleOpenFocusSettings}>
+                    Disable notifications
+                  </button>
+                </div>
+              </div>
+
+              <div className="profile-mode-card">
+                <div className="profile-mode-header">
+                  <span className="profile-mode-icon">🌙</span>
+                  <span className="profile-mode-title">Sleep Mode</span>
+                </div>
+                <div className="profile-mode-actions">
+                  <button type="button" className="profile-action-btn" onClick={() => setCloseAppsConfirm("all")}>
+                    Close everything
+                  </button>
+                  <button type="button" className="profile-action-btn" onClick={() => setScheduleShutdownPicker(!scheduleShutdownPicker)}>
+                    Schedule shutdown
+                  </button>
+                </div>
+                {scheduleShutdownPicker && (
+                  <div className="profile-shutdown-picker">
+                    <span className="profile-shutdown-label">Shut down in (minutes):</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="e.g. 15"
+                        value={scheduleShutdownConfirm}
+                        onChange={(e) => setScheduleShutdownConfirm(e.target.value)}
+                        style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
+                      />
+                      <button
+                        type="button"
+                        className="profile-action-btn"
+                        style={{ margin: 0, justifyContent: 'center' }}
+                        onClick={() => {
+                          if (scheduleShutdownConfirm && parseInt(scheduleShutdownConfirm) > 0) {
+                            handleScheduleShutdown(parseInt(scheduleShutdownConfirm) * 60);
+                          }
+                        }}
+                      >
+                        Schedule
+                      </button>
+                    </div>
+
+                    <button type="button" className="profile-action-btn profile-shutdown-cancel" onClick={() => { setScheduleShutdownPicker(false); setScheduleShutdownConfirm(""); }}>
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

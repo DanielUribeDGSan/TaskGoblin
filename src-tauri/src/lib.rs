@@ -11,6 +11,9 @@ use tokio::sync::Mutex;
 struct AppState {
     mouse_moving: Mutex<bool>,
     is_pet_mode: Mutex<bool>,
+    shutdown_cancel_tx: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+    shutdown_target: Mutex<Option<u64>>,
+    shutdown_duration: Mutex<Option<u64>>,
 }
 
 #[tauri::command]
@@ -312,6 +315,280 @@ async fn close_all_apps() -> Result<(), String> {
     }
 }
 
+/// Close only "leisure" apps (streaming, social, games). Keeps our app and system apps.
+#[tauri::command]
+async fn close_leisure_apps() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let apps_to_quit = [
+            "Spotify",
+            "Netflix",
+            "YouTube",
+            "Hulu",
+            "Disney+",
+            "Prime Video",
+            "Apple Music",
+            "Music",
+            "Discord",
+            "Slack",
+            "Telegram",
+            "WhatsApp",
+            "Messenger",
+            "Facebook",
+            "Twitch",
+            "Steam",
+            "Epic Games Launcher",
+            "Battle.net",
+            "Origin",
+            "EA app",
+            "GOG Galaxy",
+            "iTunes",
+            "TV",
+            "Podcasts",
+            "Books",
+        ];
+        run_close_apps_by_names(&apps_to_quit).await
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Not supported on this OS".to_string())
+    }
+}
+
+/// Close only "heavy" apps (browsers with many tabs, IDEs, Docker, etc.).
+#[tauri::command]
+async fn close_heavy_apps() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let apps_to_quit = [
+            "Google Chrome",
+            "Chrome",
+            "Safari",
+            "Firefox",
+            "Arc",
+            "Brave Browser",
+            "Microsoft Edge",
+            "Docker Desktop",
+            "Docker",
+            "Xcode",
+            "Visual Studio Code",
+            "Code",
+            "Figma",
+            "Zoom",
+            "Microsoft Teams",
+            "Webex",
+            "Adobe Acrobat",
+            "Adobe Acrobat DC",
+            "IntelliJ IDEA",
+            "WebStorm",
+            "PhpStorm",
+            "PyCharm",
+            "Android Studio",
+        ];
+        run_close_apps_by_names(&apps_to_quit).await
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Not supported on this OS".to_string())
+    }
+}
+
+#[cfg(target_os = "macos")]
+async fn run_close_apps_by_names(names: &[&str]) -> Result<(), String> {
+    use std::process::Command;
+    let list_str = names
+        .iter()
+        .map(|s| format!("\"{}\"", s))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let script = format!(
+        r#"
+        set appsToQuit to {{{}}}
+        tell application "System Events"
+            set activeProcs to every application process where background only is false
+            repeat with proc in activeProcs
+                set pName to name of proc
+                if appsToQuit contains pName then
+                    try
+                        set bundleId to bundle identifier of proc
+                        if bundleId is not missing value then
+                            tell application id bundleId to quit
+                        end if
+                    end try
+                end if
+            end repeat
+        end tell
+        "#,
+        list_str
+    );
+    let res = tauri::async_runtime::spawn_blocking(move || {
+        Command::new("osascript").arg("-e").arg(script).output()
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    match res {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("Command execution failed: {}", e)),
+    }
+}
+
+/// Open macOS Focus (Do Not Disturb) settings so user can enable it.
+#[tauri::command]
+async fn open_focus_settings() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        let res = Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.Focus-Settings.extension")
+            .output();
+        match res {
+            Ok(_) => Ok(()),
+            Err(e) => Err(format!("Failed to open Focus settings: {}", e)),
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Not supported on this OS".to_string())
+    }
+}
+
+/// Schedule system shutdown after delay_secs. App must stay running until then; quitting the app cancels the shutdown.
+#[tauri::command]
+async fn schedule_shutdown(
+    delay_secs: u64,
+    app_handle: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        if delay_secs == 0 {
+            return Err("Delay must be greater than 0".to_string());
+        }
+
+        // 1. Cancel existing shutdown task if any
+        let mut new_rx;
+        {
+            let mut tx_lock = state.shutdown_cancel_tx.lock().await;
+            if let Some(tx) = tx_lock.take() {
+                let _ = tx.send(()); // abort previous sleep
+            }
+
+            // Create new oneshot channel
+            let (new_tx, rx) = tokio::sync::oneshot::channel::<()>();
+            new_rx = rx;
+            *tx_lock = Some(new_tx);
+        }
+
+        let target_timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + delay_secs;
+
+        {
+            *state.shutdown_target.lock().await = Some(target_timestamp);
+            *state.shutdown_duration.lock().await = Some(delay_secs);
+        }
+
+        // 2. Spawn the transparent "Island" window at the top center
+        let window_label = "island";
+        if let Some(existing) = app_handle.get_webview_window(window_label) {
+            let _ = existing.close();
+        }
+
+        let _island_window = tauri::WebviewWindowBuilder::new(
+            &app_handle,
+            window_label,
+            tauri::WebviewUrl::App("island.html".into()),
+        )
+        .title("Shutdown Scheduler")
+        .inner_size(240.0, 60.0)
+        .transparent(true)
+        .decorations(false)
+        .always_on_top(true)
+        .resizable(false)
+        .skip_taskbar(true)
+        .shadow(false)
+        .position(0.0, 30.0) // We will center it dynamically below, but start at top
+        .build()
+        .map_err(|e| format!("Failed to create island window: {}", e))?;
+
+        // Try to center it correctly
+        if let Some(window) = app_handle.get_webview_window(window_label) {
+            if let Ok(Some(monitor)) = window.current_monitor() {
+                let monitor_size = monitor.size();
+                let window_size = window
+                    .outer_size()
+                    .unwrap_or(tauri::PhysicalSize::new(240, 60));
+                let x = (monitor_size.width as f64 / 2.0) - (window_size.width as f64 / 2.0);
+                let _ = window.set_position(tauri::Position::Physical(
+                    tauri::PhysicalPosition::new(x as i32, 20),
+                ));
+            }
+        }
+
+        // 3. Spawn the background cancellable tokio task
+        let app_clone = app_handle.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::select! {
+                _ = tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs)) => {
+                    // Time elapsed naturally, execute shutdown
+                    let _ = std::process::Command::new("shutdown")
+                        .arg("-h")
+                        .arg("now")
+                        .output();
+
+                    // Cleanup window exactly before system dies
+                    if let Some(w) = app_clone.get_webview_window("island") {
+                        let _ = w.close();
+                    }
+                }
+                _ = &mut new_rx => {
+                    // User cancelled via UI or re-scheduled
+                    println!("Shutdown task was aborted/replaced.");
+                }
+            }
+        });
+
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Not supported on this OS".to_string())
+    }
+}
+
+#[tauri::command]
+async fn cancel_shutdown(
+    app_handle: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut tx_lock = state.shutdown_cancel_tx.lock().await;
+    if let Some(tx) = tx_lock.take() {
+        let _ = tx.send(()); // Trigger the oneshot receiver
+    }
+
+    *state.shutdown_target.lock().await = None;
+    *state.shutdown_duration.lock().await = None;
+
+    if let Some(w) = app_handle.get_webview_window("island") {
+        let _ = w.close();
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_shutdown_time(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let target = *state.shutdown_target.lock().await;
+    let duration = *state.shutdown_duration.lock().await;
+
+    Ok(serde_json::json!({
+        "target_timestamp": target.unwrap_or(0),
+        "duration_secs": duration.unwrap_or(0)
+    }))
+}
+
 #[tauri::command]
 async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String, String> {
     #[cfg(target_os = "macos")]
@@ -557,6 +834,12 @@ pub fn run() {
             toggle_pet_mode,
             set_ignore_cursor_events,
             close_all_apps,
+            close_leisure_apps,
+            close_heavy_apps,
+            open_focus_settings,
+            schedule_shutdown,
+            cancel_shutdown,
+            get_shutdown_time,
             extract_text_from_screen,
             write_to_clipboard,
             process_screenshot_ocr,
@@ -566,6 +849,9 @@ pub fn run() {
             app.manage(AppState {
                 mouse_moving: Mutex::new(false),
                 is_pet_mode: Mutex::new(false),
+                shutdown_cancel_tx: Mutex::new(None),
+                shutdown_target: Mutex::new(None),
+                shutdown_duration: Mutex::new(None),
             });
 
             // Start global key listener for Triple-Tap Control
