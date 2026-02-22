@@ -1449,18 +1449,6 @@ body.dark ::-webkit-calendar-picker-indicator {
   pointer-events: auto;
 }
 
-.paint-toolbar-wrapper {
-  position: fixed;
-  top: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10001;
-  pointer-events: none;
-  width: auto;
-  display: flex;
-  justify-content: center;
-}
-
 .paint-toolbar {
   display: flex;
   align-items: center;
@@ -1610,21 +1598,26 @@ body.dark ::-webkit-calendar-picker-indicator {
 }
 
 .canvas-text-input {
-  background: transparent;
-  border: 2px dashed rgba(108, 92, 231, 0.4);
-  padding: 8px;
+  background: #ffffff !important;
+  border: 3px solid #74b9ff !important;
+  color: #000000 !important;
+  border-radius: 8px;
+  padding: 12px;
   margin: 0;
   outline: none;
-  resize: none;
-  overflow: hidden;
+  resize: both;
+  overflow: visible;
   font-family: inherit;
-  z-index: 10005;
-  /* Above canvases and toolbar */
-  min-width: 120px;
-  min-height: 1.2em;
+  font-weight: 600;
+  z-index: 100000;
+  /* Extremely high to be sure */
+  min-width: 180px;
+  min-height: 50px;
   white-space: pre-wrap;
-  /* Allow wrapping in edit mode */
   pointer-events: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  opacity: 1 !important;
+  /* Ensure it's not transparent while editing */
 }
 
 .prop-group {
@@ -1679,6 +1672,32 @@ body.dark ::-webkit-calendar-picker-indicator {
 .paint-canvas.preview-canvas {
   pointer-events: auto;
   /* Catch drawing events */
+}
+
+/* Specialized Tool Cursors */
+.paint-container.tool-pencil .preview-canvas,
+.paint-container.tool-pen .preview-canvas,
+.paint-container.tool-marker .preview-canvas,
+.paint-container.tool-brush .preview-canvas {
+  /* Pencil icon with internal fill only. Hotspot at tip (6, 26) */
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" fill="white" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" transform="translate(4,4)"/></svg>') 6 26, crosshair;
+}
+
+.paint-container.tool-eraser .preview-canvas {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="9" fill="none" stroke="black" stroke-width="1"/></svg>') 10 10, auto;
+}
+
+.paint-container.tool-text .preview-canvas {
+  cursor: text;
+}
+
+.paint-container.tool-rect .preview-canvas,
+.paint-container.tool-circle .preview-canvas {
+  cursor: crosshair;
+}
+
+.paint-container.tool-move .preview-canvas {
+  cursor: default;
 }
 
 /* The original cursor property was removed from .paint-canvas and is now implicitly handled by tool-specific classes */

@@ -25,6 +25,7 @@ interface PaintElement {
 }
 
 type ToolType = 'pencil' | 'pen' | 'marker' | 'brush' | 'eraser' | 'text' | 'rect' | 'circle' | 'move';
+type ResizeHandle = 'nw' | 'n' | 'ne' | 'w' | 'e' | 'sw' | 's' | 'se' | null;
 
 const PaintPropertiesPanel = memo(function PaintPropertiesPanel({
     color,
@@ -51,25 +52,29 @@ const PaintPropertiesPanel = memo(function PaintPropertiesPanel({
         <div className="paint-properties-anchor">
             <div className="paint-properties">
                 <div className="prop-section">
-                    <label>Trazo</label>
-                    <div className="color-grid">
+                    <label htmlFor="color-picker">Trazo</label>
+                    <div id="color-picker" className="color-grid">
                         {['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ffffff', '#000000'].map(c => (
                             <div
                                 key={c}
+                                role="button"
+                                tabIndex={0}
                                 className={`color-swatch ${color === c ? 'active' : ''}`}
                                 style={{ backgroundColor: c }}
                                 onClick={() => setColor(c)}
+                                onKeyDown={(e) => e.key === 'Enter' && setColor(c)}
                             />
                         ))}
                     </div>
                 </div>
                 {tool === 'text' && (
                     <div className="prop-section">
-                        <label>Tamaño de Fuente</label>
-                        <div className="size-btns">
+                        <label htmlFor="size-btns">Tamaño de Fuente</label>
+                        <div id="size-btns" className="size-btns">
                             {[16, 24, 32, 48].map(size => (
                                 <button
                                     key={size}
+                                    type="button"
                                     className={`size-btn ${thickness === size / 5 ? 'active' : ''}`}
                                     onClick={() => setThickness(size / 5)}
                                 >
@@ -80,12 +85,12 @@ const PaintPropertiesPanel = memo(function PaintPropertiesPanel({
                     </div>
                 )}
                 <div className="prop-section">
-                    <label>Grosor / Tamaño: {thickness}</label>
-                    <input type="range" min="1" max="50" value={thickness} onChange={(e) => setThickness(Number(e.target.value))} />
+                    <label htmlFor="thickness-range">Grosor / Tamaño: {thickness}</label>
+                    <input id="thickness-range" type="range" min="1" max="50" value={thickness} onChange={(e) => setThickness(Number(e.target.value))} />
                 </div>
                 <div className="prop-section">
-                    <label>Opacidad: {Math.round(opacity * 100)}%</label>
-                    <input type="range" min="0.1" max="1" step="0.1" value={opacity} onChange={(e) => setOpacity(Number(e.target.value))} />
+                    <label htmlFor="opacity-range">Opacidad: {Math.round(opacity * 100)}%</label>
+                    <input id="opacity-range" type="range" min="0.1" max="1" step="0.1" value={opacity} onChange={(e) => setOpacity(Number(e.target.value))} />
                 </div>
                 <div className="prop-section actions">
                     <label>Capas / Acciones</label>
@@ -102,6 +107,7 @@ const PaintPropertiesPanel = memo(function PaintPropertiesPanel({
 const PaintBoard = ({ onToggleSidebar, onClose }: { onToggleSidebar: (show: boolean) => void, onClose: () => void }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const canvasPreviewRef = useRef<HTMLCanvasElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
     const elementsRef = useRef<PaintElement[]>([]);
     const [elements, setElements] = useState<PaintElement[]>([]);
     elementsRef.current = elements;
@@ -109,12 +115,38 @@ const PaintBoard = ({ onToggleSidebar, onClose }: { onToggleSidebar: (show: bool
     const [color, setColor] = useState('#ff0000');
     const [thickness, setThickness] = useState(3);
     const [opacity, setOpacity] = useState(1);
+    const [lastTool, setLastTool] = useState<ToolType>('pencil');
 
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [selectionBox, setSelectionBox] = useState<{ start: Point; current: Point } | null>(null);
     const [previewElement, setPreviewElement] = useState<PaintElement | null>(null);
     const [activeTextId, setActiveTextId] = useState<string | null>(null);
     const [startPos, setStartPos] = useState<Point | null>(null);
+    const [resizeHandle, setResizeHandle] = useState<ResizeHandle>(null);
+
+    const getResizeHandle = (x: number, y: number, el: PaintElement): ResizeHandle => {
+        if (el.type !== 'rect' && el.type !== 'circle' && el.type !== 'text') return null;
+        const width = el.width || 0;
+        const height = el.height || el.fontSize || 30;
+        const ex = el.x || 0;
+        const ey = el.y || 0;
+        const pad = 10;
+
+        const left = Math.min(ex, ex + (el.type === 'text' ? (el.width || 180) : width));
+        const right = Math.max(ex, ex + (el.type === 'text' ? (el.width || 180) : width));
+        const top = Math.min(ey, ey + (el.type === 'text' ? 0 : height));
+        const bottom = Math.max(ey, ey + (el.type === 'text' ? (el.fontSize || 20) : height));
+
+        if (Math.abs(x - left) < pad && Math.abs(y - top) < pad) return 'nw';
+        if (Math.abs(x - right) < pad && Math.abs(y - top) < pad) return 'ne';
+        if (Math.abs(x - left) < pad && Math.abs(y - bottom) < pad) return 'sw';
+        if (Math.abs(x - right) < pad && Math.abs(y - bottom) < pad) return 'se';
+        if (Math.abs(x - (left + right) / 2) < pad && Math.abs(y - top) < pad) return 'n';
+        if (Math.abs(x - (left + right) / 2) < pad && Math.abs(y - bottom) < pad) return 's';
+        if (Math.abs(x - left) < pad && Math.abs(y - (top + bottom) / 2) < pad) return 'w';
+        if (Math.abs(x - right) < pad && Math.abs(y - (top + bottom) / 2) < pad) return 'e';
+        return null;
+    };
 
     // Initial window setup (Mount/Unmount only)
     useEffect(() => {
@@ -143,6 +175,26 @@ const PaintBoard = ({ onToggleSidebar, onClose }: { onToggleSidebar: (show: bool
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [selectedIds, activeTextId]);
 
+    // Reset inline cursor when tool changes so CSS can take over
+    useEffect(() => {
+        if (tool !== lastTool) {
+            if (canvasPreviewRef.current) {
+                canvasPreviewRef.current.style.cursor = '';
+            }
+            setLastTool(tool);
+        }
+    }, [tool, lastTool]);
+
+    // Explicitly focus textarea when it appears
+    useEffect(() => {
+        if (activeTextId && textareaRef.current) {
+            textareaRef.current.focus();
+            // Move cursor to end
+            const length = textareaRef.current.value.length;
+            textareaRef.current.setSelectionRange(length, length);
+        }
+    }, [activeTextId]);
+
     const handleMouseDown = (e: React.MouseEvent) => {
         // Prevent drawing when clicking on UI panels
         if (e.target !== canvasPreviewRef.current) return;
@@ -153,22 +205,41 @@ const PaintBoard = ({ onToggleSidebar, onClose }: { onToggleSidebar: (show: bool
         const y = e.clientY - rect.top;
 
         if (tool === 'move') {
-            // Find clicked element (reverse order for top-most)
-            const clicked = [...elements].reverse().find(el => {
-                const width = el.width || 100;
-                const height = el.height || el.fontSize || 30;
+            // Priority 1: Check if clicking a resize handle of an already selected single element
+            if (selectedIds.length === 1) {
+                const el = elements.find(e => e.id === selectedIds[0]);
+                if (el) {
+                    const handle = getResizeHandle(x, y, el);
+                    if (handle) {
+                        setResizeHandle(handle);
+                        setStartPos({ x, y });
+                        return;
+                    }
+                }
+            }
 
+            // Priority 2: Find clicked element (reverse order for top-most)
+            const clicked = [...elements].reverse().find(el => {
                 if (el.type === 'rect' || el.type === 'circle' || el.type === 'text') {
-                    return x >= (el.x || 0) && x <= (el.x || 0) + width &&
-                        y >= (el.y || 0) - (el.type === 'text' ? height : 0) && y <= (el.y || 0) + (el.type === 'text' ? 0 : height);
+                    const width = el.type === 'text' ? (el.width || 180) : (el.width || 0);
+                    const height = el.type === 'text' ? (el.fontSize || 20) : (el.height || 0);
+                    const ex = el.x || 0;
+                    const ey = el.y || 0;
+
+                    const left = Math.min(ex, ex + width);
+                    const right = Math.max(ex, ex + width);
+                    const top = Math.min(ey, ey + height);
+                    const bottom = Math.max(ey, ey + height);
+
+                    return x >= left && x <= right && y >= top && y <= bottom;
                 }
                 if (el.points) {
                     const xs = el.points.map(p => p.x);
                     const ys = el.points.map(p => p.y);
-                    const minX = Math.min(...xs);
-                    const maxX = Math.max(...xs);
-                    const minY = Math.min(...ys);
-                    const maxY = Math.max(...ys);
+                    const minX = Math.min(...xs) - 10;
+                    const maxX = Math.max(...xs) + 10;
+                    const minY = Math.min(...ys) - 10;
+                    const maxY = Math.max(...ys) + 10;
                     return x >= minX && x <= maxX && y >= minY && y <= maxY;
                 }
                 return false;
@@ -180,6 +251,9 @@ const PaintBoard = ({ onToggleSidebar, onClose }: { onToggleSidebar: (show: bool
                 } else if (!selectedIds.includes(clicked.id)) {
                     setSelectedIds([clicked.id]);
                 }
+                // Check if we immediately started on a handle of the newly clicked
+                const handle = getResizeHandle(x, y, clicked);
+                if (handle) setResizeHandle(handle);
                 setStartPos({ x, y });
             } else {
                 setSelectedIds([]);
@@ -228,23 +302,64 @@ const PaintBoard = ({ onToggleSidebar, onClose }: { onToggleSidebar: (show: bool
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        if (tool === 'move' && startPos) {
-            if (selectedIds.length > 0) {
-                const dx = x - startPos.x;
-                const dy = y - startPos.y;
-                setElements(prev => prev.map(el => {
-                    if (selectedIds.includes(el.id)) {
-                        if (el.type === 'rect' || el.type === 'circle' || el.type === 'text') {
-                            return { ...el, x: (el.x || 0) + dx, y: (el.y || 0) + dy };
-                        } else if (el.points) {
-                            return { ...el, points: el.points.map(p => ({ x: p.x + dx, y: p.y + dy })) };
+        if (tool === 'move') {
+            const canvas = canvasPreviewRef.current;
+            if (canvas && !startPos) {
+                // Dynamic cursor
+                let newCursor = 'default';
+                if (selectedIds.length === 1) {
+                    const el = elements.find(e => e.id === selectedIds[0]);
+                    if (el) {
+                        const h = getResizeHandle(x, y, el);
+                        if (h) {
+                            if (h === 'nw' || h === 'se') newCursor = 'nwse-resize';
+                            else if (h === 'ne' || h === 'sw') newCursor = 'nesw-resize';
+                            else if (h === 'n' || h === 's') newCursor = 'ns-resize';
+                            else if (h === 'w' || h === 'e') newCursor = 'ew-resize';
                         }
                     }
-                    return el;
-                }));
-                setStartPos({ x, y });
-            } else if (selectionBox) {
-                setSelectionBox(prev => prev ? { ...prev, current: { x, y } } : null);
+                }
+                canvas.style.cursor = newCursor;
+            }
+
+            if (startPos) {
+                const dx = x - startPos.x;
+                const dy = y - startPos.y;
+
+                if (resizeHandle && selectedIds.length === 1) {
+                    setElements(prev => prev.map(el => {
+                        if (el.id === selectedIds[0]) {
+                            let { x: ex = 0, y: ey = 0, width: ew = 100, height: eh = 30 } = el;
+                            if (el.type === 'text') eh = el.fontSize || 20;
+
+                            if (resizeHandle.includes('e')) ew += dx;
+                            if (resizeHandle.includes('s')) eh += dy;
+                            if (resizeHandle.includes('w')) { ex += dx; ew -= dx; }
+                            if (resizeHandle.includes('n')) { ey += dy; eh -= dy; }
+
+                            if (el.type === 'text') {
+                                return { ...el, x: ex, y: ey, fontSize: Math.max(10, eh), width: Math.max(20, ew) };
+                            }
+                            return { ...el, x: ex, y: ey, width: Math.max(5, ew), height: Math.max(5, eh) };
+                        }
+                        return el;
+                    }));
+                    setStartPos({ x, y });
+                } else if (selectedIds.length > 0) {
+                    setElements(prev => prev.map(el => {
+                        if (selectedIds.includes(el.id)) {
+                            if (el.type === 'rect' || el.type === 'circle' || el.type === 'text') {
+                                return { ...el, x: (el.x || 0) + dx, y: (el.y || 0) + dy };
+                            } else if (el.points) {
+                                return { ...el, points: el.points.map(p => ({ x: p.x + dx, y: p.y + dy })) };
+                            }
+                        }
+                        return el;
+                    }));
+                    setStartPos({ x, y });
+                } else if (selectionBox) {
+                    setSelectionBox(prev => prev ? { ...prev, current: { x, y } } : null);
+                }
             }
             return;
         }
@@ -291,6 +406,7 @@ const PaintBoard = ({ onToggleSidebar, onClose }: { onToggleSidebar: (show: bool
         }
         setPreviewElement(null);
         setStartPos(null);
+        setResizeHandle(null);
     };
 
     const handleTextChange = (id: string, text: string) => {
@@ -431,15 +547,45 @@ const PaintBoard = ({ onToggleSidebar, onClose }: { onToggleSidebar: (show: bool
         ctx.globalCompositeOperation = 'source-over';
         ctx.globalAlpha = 1;
 
-        // Selection highlight
+        // Selection highlight with recursive handles
         if (selectedIds.includes(el.id)) {
             ctx.setLineDash([5, 5]);
             ctx.strokeStyle = '#007AFF';
             ctx.lineWidth = 1;
+            const isSingle = selectedIds.length === 1;
+
             if (el.type === 'rect' || el.type === 'circle' || el.type === 'text') {
-                const width = el.width || 100;
-                const height = el.height || el.fontSize || 30;
-                ctx.strokeRect((el.x || 0) - 5, (el.y || 0) - (el.type === 'text' ? height : 0) - 5, width + 10, height + 10);
+                const width = el.type === 'text' ? (el.width || 180) : (el.width || 0);
+                const height = el.type === 'text' ? (el.fontSize || 20) : (el.height || 0);
+                const ex = el.x || 0;
+                const ey = el.y || 0;
+
+                const left = Math.min(ex, ex + width);
+                const right = Math.max(ex, ex + width);
+                const top = Math.min(ey, ey + height);
+                const bottom = Math.max(ey, ey + height);
+
+                ctx.strokeRect(left - 5, top - 5, (right - left) + 10, (bottom - top) + 10);
+                ctx.setLineDash([]);
+
+                if (isSingle) {
+                    // Draw 8 Handles
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.strokeStyle = '#007AFF';
+                    ctx.lineWidth = 2;
+                    const hs = 8; // handle size
+                    const points = [
+                        [left - 5, top - 5], [(left + right) / 2, top - 5], [right + 5, top - 5],
+                        [left - 5, (top + bottom) / 2], [right + 5, (top + bottom) / 2],
+                        [left - 5, bottom + 5], [(left + right) / 2, bottom + 5], [right + 5, bottom + 5]
+                    ];
+                    points.forEach(([hx, hy]) => {
+                        ctx.beginPath();
+                        ctx.arc(hx, hy, hs / 2, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                    });
+                }
             } else if (el.points) {
                 const xs = el.points.map(p => p.x);
                 const ys = el.points.map(p => p.y);
@@ -489,27 +635,23 @@ const PaintBoard = ({ onToggleSidebar, onClose }: { onToggleSidebar: (show: bool
             </div>
 
             {/* Text input outside paint-container so removing it on clear doesn't reflow the island */}
-            {activeTextId && (() => {
-                const activeEl = elements.find(el => el.id === activeTextId);
-                if (!activeEl) return null;
-                return (
-                    <textarea
-                        className="canvas-text-input"
-                        autoFocus
-                        value={activeEl.text || ''}
-                        onChange={(e) => handleTextChange(activeTextId, e.target.value)}
-                        onBlur={closeTextEdit}
-                        onFocus={(e) => e.target.select()}
-                        style={{
-                            position: 'fixed',
-                            left: (activeEl.x || 0) + 'px',
-                            top: (activeEl.y || 0) + 'px',
-                            color: activeEl.color,
-                            fontSize: (activeEl.fontSize || 20) + 'px',
-                        }}
-                    />
-                );
-            })()}
+            {activeTextId && elements.find(el => el.id === activeTextId) && (
+                <textarea
+                    ref={textareaRef}
+                    className="canvas-text-input"
+                    placeholder="Escribe aquí..."
+                    value={elements.find(el => el.id === activeTextId)?.text || ''}
+                    onChange={(e) => handleTextChange(activeTextId, e.target.value)}
+                    onBlur={closeTextEdit}
+                    style={{
+                        position: 'fixed',
+                        left: (elements.find(el => el.id === activeTextId)?.x || 0) + 'px',
+                        top: (elements.find(el => el.id === activeTextId)?.y || 0) + 'px',
+                        color: elements.find(el => el.id === activeTextId)?.color,
+                        fontSize: (elements.find(el => el.id === activeTextId)?.fontSize || 20) + 'px',
+                    }}
+                />
+            )}
         </div>
     );
 
