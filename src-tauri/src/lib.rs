@@ -11,6 +11,7 @@ use tokio::sync::Mutex;
 struct AppState {
     mouse_moving: Mutex<bool>,
     is_pet_mode: Mutex<bool>,
+    is_dialog_open: Mutex<bool>,
     shutdown_cancel_tx: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
     shutdown_target: Mutex<Option<u64>>,
     shutdown_duration: Mutex<Option<u64>>,
@@ -744,6 +745,129 @@ fn test_toast(app: tauri::AppHandle) {
 }
 
 #[tauri::command]
+async fn convert_pdf_to_word(
+    app_handle: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    pdf_path: String,
+) -> Result<String, String> {
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+    use tauri::Manager;
+
+    let emit_progress = |step: &str, progress: f32| {
+        let _ = window.emit(
+            "pdf-progress",
+            serde_json::json!({ "step": step, "progress": progress }),
+        );
+    };
+
+    emit_progress("Initializing converter...", 0.1);
+
+    // 1. Resolve venv path in the user's home directory
+    let home = std::env::var("HOME").map_err(|e| e.to_string())?;
+    let venv_dir = Path::new(&home).join(".taskgoblin_venv");
+
+    // 2. Create venv if not exists
+    if !venv_dir.exists() {
+        emit_progress("Setting up Python environment...", 0.2);
+        let venv_status = Command::new("python3")
+            .arg("-m")
+            .arg("venv")
+            .arg(&venv_dir)
+            .status()
+            .map_err(|e| format!("Failed to create venv: {}", e))?;
+
+        if !venv_status.success() {
+            return Err("Failed to create Python virtual environment".to_string());
+        }
+    }
+
+    let python_bin = venv_dir.join("bin").join("python3");
+    let pip_bin = venv_dir.join("bin").join("pip3");
+
+    // 3. Install pdf2docx if not installed
+    let mod_check = Command::new(&python_bin)
+        .arg("-c")
+        .arg("import pdf2docx")
+        .status()
+        .map_err(|e| format!("Failed to check pdf2docx: {}", e))?;
+
+    if !mod_check.success() {
+        emit_progress("Installing libraries (first time only)...", 0.4);
+        let pip_status = Command::new(&pip_bin)
+            .arg("install")
+            .arg("pdf2docx")
+            .status()
+            .map_err(|e| format!("Failed to install pdf2docx: {}", e))?;
+
+        if !pip_status.success() {
+            return Err("Failed to install pdf2docx via pip".to_string());
+        }
+    }
+
+    // 4. Resolve Downloads folder
+    let downloads_dir = app_handle
+        .path()
+        .download_dir()
+        .map_err(|e| format!("Could not find Downloads directory: {}", e))?;
+
+    let pdf_path_obj = Path::new(&pdf_path);
+    if !pdf_path_obj.exists() {
+        return Err("Selected PDF file does not exist locally.".to_string());
+    }
+
+    let file_name = pdf_path_obj
+        .file_stem()
+        .ok_or("Invalid file name")?
+        .to_string_lossy();
+    let output_path = downloads_dir.join(format!("{}.docx", file_name));
+    let output_str = output_path.to_string_lossy().to_string();
+
+    emit_progress("Converting PDF to Word...", 0.6);
+
+    // A python script that accepts arguments: pdf_file, docx_file
+    let py_script = r#"
+import sys
+from pdf2docx import Converter
+
+pdf_file = sys.argv[1]
+docx_file = sys.argv[2]
+try:
+    cv = Converter(pdf_file)
+    cv.convert(docx_file, start=0, end=None)
+    cv.close()
+except Exception as e:
+    print(f"ERROR: {e}")
+    sys.exit(1)
+"#;
+
+    let pdf_path_clone = pdf_path.clone();
+    let output_str_clone = output_str.clone();
+
+    let output = tauri::async_runtime::spawn_blocking(move || {
+        Command::new(&python_bin)
+            .arg("-c")
+            .arg(py_script)
+            .arg(&pdf_path_clone)
+            .arg(&output_str_clone)
+            .output()
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| format!("Failed to execute python converter script: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        return Err(format!("Python script failed: {} | {}", stdout, stderr));
+    }
+
+    emit_progress("Done!", 1.0);
+
+    Ok(output_str)
+}
+
+#[tauri::command]
 async fn process_screenshot_ocr(window: tauri::WebviewWindow) -> Result<(), String> {
     let app_handle = window.app_handle().clone();
     match extract_text_from_screen(window).await {
@@ -771,8 +895,14 @@ async fn process_screenshot_ocr(window: tauri::WebviewWindow) -> Result<(), Stri
 }
 
 #[tauri::command]
-async fn hide_window(window: tauri::WebviewWindow) -> Result<(), String> {
-    window.hide().map_err(|e| e.to_string())
+async fn set_dialog_open(state: tauri::State<'_, AppState>, open: bool) -> Result<(), String> {
+    *state.is_dialog_open.lock().await = open;
+    Ok(())
+}
+
+#[tauri::command]
+async fn hide_window(window: tauri::WebviewWindow) {
+    let _ = window.hide();
 }
 
 fn spawn_key_listener(app_handle: tauri::AppHandle) {
@@ -821,6 +951,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             hide_window,
             is_mouse_moving,
@@ -843,12 +974,15 @@ pub fn run() {
             extract_text_from_screen,
             write_to_clipboard,
             process_screenshot_ocr,
+            convert_pdf_to_word,
+            set_dialog_open,
             test_toast
         ])
         .setup(|app| {
             app.manage(AppState {
                 mouse_moving: Mutex::new(false),
                 is_pet_mode: Mutex::new(false),
+                is_dialog_open: Mutex::new(false),
                 shutdown_cancel_tx: Mutex::new(None),
                 shutdown_target: Mutex::new(None),
                 shutdown_duration: Mutex::new(None),
@@ -930,11 +1064,14 @@ pub fn run() {
                     tauri::WindowEvent::Focused(focused) => {
                         if !focused {
                             let state = app_handle.state::<AppState>();
-                            let is_pet_mode = tauri::async_runtime::block_on(async {
-                                *state.is_pet_mode.lock().await
-                            });
+                            let (is_pet_mode, is_dialog_open) =
+                                tauri::async_runtime::block_on(async {
+                                    let pm = *state.is_pet_mode.lock().await;
+                                    let ido = *state.is_dialog_open.lock().await;
+                                    (pm, ido)
+                                });
 
-                            if !is_pet_mode {
+                            if !is_pet_mode && !is_dialog_open {
                                 let _ = window_clone.hide();
                             }
                         }

@@ -4,6 +4,7 @@ import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { register, unregister, isRegistered } from '@tauri-apps/plugin-global-shortcut';
 import { listen } from "@tauri-apps/api/event";
+import { open } from '@tauri-apps/plugin-dialog';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import PetAgent from './components/PetAgent';
@@ -148,6 +149,7 @@ function App() {
   const [isPetMode, setIsPetMode] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isAutostartEnabled, setIsAutostartEnabled] = useState(false);
+  const [pdfConversion, setPdfConversion] = useState<{ active: boolean; step: string; progress: number }>({ active: false, step: "", progress: 0 });
   const [appSearchTerm, setAppSearchTerm] = useState("");
   const [closeAppsConfirm, setCloseAppsConfirm] = useState<'all' | 'leisure' | 'heavy' | null>(null);
   const [scheduleShutdownPicker, setScheduleShutdownPicker] = useState(false);
@@ -278,12 +280,22 @@ function App() {
       }, 3500);
     });
 
+    // Listen for PDF conversion progress
+    const unlistenPdf = listen("pdf-progress", (event: any) => {
+      const { step, progress } = event.payload;
+      setPdfConversion({ active: true, step, progress });
+      if (progress === 1.0) {
+        setTimeout(() => setPdfConversion(prev => ({ ...prev, active: false })), 2000);
+      }
+    });
+
     return () => {
       globalThis.removeEventListener("contextmenu", handleContextMenu);
       window.removeEventListener("keydown", handleKeyDown);
       unregister('Control+Alt+2').catch(console.error);
       unlistenPromise.then(unlisten => unlisten());
       unlistenToast.then(u => u());
+      unlistenPdf.then(fn => fn());
     };
   }, []);
 
@@ -370,6 +382,32 @@ function App() {
     } catch (err) {
       console.error(err);
       // Backend already shows a notification, but we can log it here
+    }
+  };
+
+  const handleConvertPdf = async () => {
+    try {
+      await invoke("set_dialog_open", { open: true });
+      const selected = await open({
+        multiple: false,
+        filters: [{
+          name: 'PDF',
+          extensions: ['pdf']
+        }]
+      });
+      await invoke("set_dialog_open", { open: false });
+
+      if (selected && typeof selected === 'string') {
+        setPdfConversion({ active: true, step: "Initializing...", progress: 0.1 });
+        await invoke("convert_pdf_to_word", { pdfPath: selected });
+        // The "Done" toast will be handled by the listener or after success
+        showToast("PDF converted successfully! Saved to Downloads. 📄✨");
+      }
+    } catch (err) {
+      console.error(err);
+      await invoke("set_dialog_open", { open: false });
+      setPdfConversion({ active: false, step: "", progress: 0 });
+      showToast("Error converting PDF: " + String(err));
     }
   };
 
@@ -558,7 +596,7 @@ function App() {
               {"mascota (gato realista)".includes(appSearchTerm.toLowerCase()) && (
                 <div className={`list-item ${isPetMode ? 'active' : ''}`} onClick={togglePetMode}>
                   <div className="icon"><PetIcon /></div>
-                  <span>Mascota (Gato Realista)</span>
+                  <span>Mascota</span>
                   <div className={`toggle-switch ${isPetMode ? 'active' : ''}`}>
                     <div className="toggle-knob" />
                   </div>
@@ -629,8 +667,8 @@ function App() {
                           className="profile-action-btn"
                           style={{ margin: 0, padding: '8px 16px', width: 'auto' }}
                           onClick={() => {
-                            if (scheduleShutdownConfirm && parseInt(scheduleShutdownConfirm) > 0) {
-                              handleScheduleShutdown(parseInt(scheduleShutdownConfirm) * 60);
+                            if (scheduleShutdownConfirm && Number.parseInt(scheduleShutdownConfirm) > 0) {
+                              handleScheduleShutdown(Number.parseInt(scheduleShutdownConfirm) * 60);
                             }
                           }}
                         >
@@ -640,6 +678,23 @@ function App() {
                     </div>
                   )}
                 </>
+              )}
+
+              {"pdf to word".includes(appSearchTerm.toLowerCase()) && (
+                <div className="list-item" onClick={handleConvertPdf}>
+                  <div className="icon">
+                    <div className="icon">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                      </svg>
+                    </div>
+                  </div>
+                  <span>Convert PDF to Word</span>
+                </div>
               )}
 
               {(!appSearchTerm || "profiles".includes(appSearchTerm.toLowerCase()) || "modes".includes(appSearchTerm.toLowerCase())) && (
@@ -909,6 +964,56 @@ function App() {
       )}
 
       {isPetMode && <PetAgent isSidebarVisible={isSidebarOpen} />}
+
+      {pdfConversion.active && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.7)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+          color: 'white',
+          padding: '24px'
+        }}>
+          <div style={{
+            backgroundColor: 'var(--bg-secondary)',
+            padding: '24px',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '300px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+            border: '1px solid var(--border-color)',
+            textAlign: 'center'
+          }}>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>Converting PDF...</h3>
+            <div style={{
+              width: '100%',
+              height: '8px',
+              backgroundColor: 'rgba(255,255,255,0.1)',
+              borderRadius: '4px',
+              overflow: 'hidden',
+              marginBottom: '12px'
+            }}>
+              <div style={{
+                width: `${pdfConversion.progress * 100}%`,
+                height: '100%',
+                backgroundColor: 'var(--accent-color)',
+                transition: 'width 0.3s ease'
+              }} />
+            </div>
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
+              {pdfConversion.step}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
