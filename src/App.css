@@ -94,6 +94,12 @@ body {
   padding-right: 15px;
 }
 
+.app-root.full-screen {
+  padding: 0;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
 /* Base App Wrapper - The "Card" design */
 .app-wrapper {
   position: relative;
@@ -116,6 +122,23 @@ body {
 }
 
 /* When Pet Mode is Active, the root is transparent, but we keep the Card look for the sidebar */
+.app-wrapper.pet-mode-active,
+.app-wrapper.paint-mode-active {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  pointer-events: none;
+  transition: none !important;
+  transform: none !important;
+  /* Block jittering/sliding during expansion */
+}
+
+/* Ensure no transitions when switching to full-screen root */
+.app-root.full-screen .app-wrapper {
+  transition: none !important;
+  transform: none !important;
+}
+
 .pet-mode-active {
   position: fixed;
   top: 0;

@@ -321,16 +321,18 @@ function App() {
   const togglePetMode = async () => {
     const newMode = !isPetMode;
     try {
+      // Immediate UI update for "ugly" transition fix
+      if (newMode) setIsSidebarOpen(false);
+
       await invoke("toggle_pet_mode", { active: newMode });
       setIsPetMode(newMode);
-      if (newMode) {
-        setIsSidebarOpen(false); // Auto-hide on start
-      } else {
+
+      if (!newMode) {
         setIsSidebarOpen(true); // Restore on stop
         // Force window to be interactive again
         await invoke("set_ignore_cursor_events", { ignore: false });
       }
-      showToast(newMode ? "cat mode! " : "cat mode off... 🏠");
+      showToast(newMode ? "cat mode! 🐾" : "cat mode off... 🏠");
     } catch (err) {
       showToast("Error toggling cat mode: " + err);
     }
@@ -401,6 +403,22 @@ function App() {
     } catch (err) {
       console.error(err);
       // Backend already shows a notification, but we can log it here
+    }
+  };
+
+  const togglePaintMode = async (active?: boolean) => {
+    const nextActive = active !== undefined ? active : !isPaintActive;
+    try {
+      // Coordinate: Invoke Tauri FIRST for expansion
+      await invoke("toggle_paint_mode", { active: nextActive });
+      setIsPaintActive(nextActive);
+      if (!nextActive) {
+        setIsSidebarOpen(true);
+      } else {
+        setIsSidebarOpen(false);
+      }
+    } catch (err) {
+      showToast("Error toggling paint: " + err);
     }
   };
 
@@ -498,11 +516,11 @@ function App() {
   };
 
   return (
-    <div className="app-root">
+    <div className={`app-root ${(isPetMode || isPaintActive) ? 'full-screen' : ''}`}>
       {isPaintActive && (
         <PaintBoard
           onToggleSidebar={setIsSidebarOpen}
-          onClose={() => setIsPaintActive(false)}
+          onClose={() => togglePaintMode(false)}
         />
       )}
       <div
@@ -734,7 +752,7 @@ function App() {
                 )}
 
                 {(!appSearchTerm || "paint".includes(appSearchTerm.toLowerCase()) || "dibujo".includes(appSearchTerm.toLowerCase()) || "pintura".includes(appSearchTerm.toLowerCase())) && (
-                  <div className="list-item" onClick={() => setIsPaintActive(true)}>
+                  <div className="list-item" onClick={() => togglePaintMode(true)}>
                     <div className="icon">
                       <div className="icon">
                         <PaintIcon />

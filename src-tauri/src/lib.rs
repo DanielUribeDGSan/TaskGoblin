@@ -16,6 +16,7 @@ struct AppState {
     shutdown_cancel_tx: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
     shutdown_target: Mutex<Option<u64>>,
     shutdown_duration: Mutex<Option<u64>>,
+    last_tray_pos: Mutex<Option<tauri::PhysicalPosition<i32>>>,
 }
 
 #[tauri::command]
@@ -243,21 +244,35 @@ async fn toggle_pet_mode(
     #[cfg(target_os = "macos")]
     {
         if active {
-            // Make full screen and ignore mouse
-            let _ = window.set_resizable(true);
-            let _ = window.maximize();
-            let _ = window.set_always_on_top(true);
-            let _ = window.set_ignore_cursor_events(true);
+            // Manual "maximize" to avoid OS animation jitter
+            if let Ok(Some(monitor)) = window.current_monitor() {
+                let size = monitor.size();
+                let _ = window.set_resizable(true);
+                let _ = window.set_size(tauri::Size::Physical(*size));
+                let _ = window.set_position(tauri::PhysicalPosition::new(0, 0));
+                let _ = window.set_always_on_top(true);
+                let _ = window.set_ignore_cursor_events(true);
+            }
         } else {
+            // Hide window during transition flip to avoid seeing the sidebar jump/slide
+            let _ = window.hide();
+
             // Restore sidebar size
             let _ = window.set_ignore_cursor_events(false);
-            let _ = window.unmaximize();
-            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize {
-                width: 440.0,
-                height: 820.0,
-            }));
             let _ = window.set_resizable(false);
+            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(440.0, 820.0)));
+
+            // Force position restoration
+            let pos_lock = state.last_tray_pos.lock().await;
+            if let Some(pos) = *pos_lock {
+                let _ = window.set_position(tauri::Position::Physical(pos));
+            }
+
             let _ = window.set_always_on_top(false);
+
+            // Show again once in place
+            let _ = window.show();
+            let _ = window.set_focus();
         }
         Ok(())
     }
@@ -281,25 +296,35 @@ async fn toggle_paint_mode(
     #[cfg(target_os = "macos")]
     {
         if active {
-            // Make full screen and ignore mouse initially (or not?)
-            // For painting, we WANT to capture mouse if we are drawing.
-            // But we need to be able to click through to other apps if not drawing?
-            // Usually, paint modes capture everything.
-            let _ = window.set_resizable(true);
-            let _ = window.maximize();
-            let _ = window.set_always_on_top(true);
-            // We start with ignore false so we can interact with the toolbar
-            let _ = window.set_ignore_cursor_events(false);
+            // Manual "maximize" to avoid OS animation jitter
+            if let Ok(Some(monitor)) = window.current_monitor() {
+                let size = monitor.size();
+                let _ = window.set_resizable(true);
+                let _ = window.set_size(tauri::Size::Physical(*size));
+                let _ = window.set_position(tauri::PhysicalPosition::new(0, 0));
+                let _ = window.set_always_on_top(true);
+                let _ = window.set_ignore_cursor_events(false);
+            }
         } else {
+            // Hide window during transition flip to avoid seeing the sidebar jump/slide
+            let _ = window.hide();
+
             // Restore sidebar size
             let _ = window.set_ignore_cursor_events(false);
-            let _ = window.unmaximize();
-            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize {
-                width: 440.0,
-                height: 820.0,
-            }));
             let _ = window.set_resizable(false);
+            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(440.0, 820.0)));
+
+            // Force position restoration
+            let pos_lock = state.last_tray_pos.lock().await;
+            if let Some(pos) = *pos_lock {
+                let _ = window.set_position(tauri::Position::Physical(pos));
+            }
+
             let _ = window.set_always_on_top(false);
+
+            // Show again once in place
+            let _ = window.show();
+            let _ = window.set_focus();
         }
         Ok(())
     }
@@ -1045,6 +1070,7 @@ pub fn run() {
                 shutdown_cancel_tx: Mutex::new(None),
                 shutdown_target: Mutex::new(None),
                 shutdown_duration: Mutex::new(None),
+                last_tray_pos: Mutex::new(None),
             });
 
             // Start global key listener for Triple-Tap Control
@@ -1056,6 +1082,26 @@ pub fn run() {
                 use tauri_plugin_notification::NotificationExt;
                 let _ = handle.notification().request_permission();
             });
+            // --- Initial Window Positioning ---
+            if let Some(window) = app.get_webview_window("main") {
+                let window_clone = window.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Ok(Some(monitor)) = window_clone.current_monitor() {
+                        let monitor_size = monitor.size();
+                        let scale_factor = monitor.scale_factor();
+
+                        // Default to top-right corner if no tray pos yet
+                        let sidebar_width_logical = 440.0;
+                        let sidebar_width_physical = (sidebar_width_logical * scale_factor) as i32;
+
+                        let x = monitor_size.width as i32 - sidebar_width_physical - 20; // 20px padding from right
+                        let pos = tauri::PhysicalPosition::new(x, 30); // 30px from top
+
+                        let _ = window_clone.set_position(pos);
+                    }
+                });
+            }
+            // ------------------------------------
 
             let toggle_i =
                 MenuItem::<Wry>::with_id(app, "toggle", "Start Moving Mouse", true, None::<&str>)?;
@@ -1102,9 +1148,27 @@ pub fn run() {
                                 let _ = window.hide();
                             } else {
                                 if let Ok(size) = window.outer_size() {
-                                    let x = (position.x as i32) - (size.width as i32 / 2);
-                                    let _ =
-                                        window.set_position(tauri::PhysicalPosition::new(x, 30));
+                                    let app_handle = tray.app_handle().clone();
+                                    let position = position.clone();
+                                    let window_clone = window.clone(); // Clone window to move into async block
+
+                                    tauri::async_runtime::spawn(async move {
+                                        let state = app_handle.state::<AppState>();
+                                        let is_pet = *state.is_pet_mode.lock().await;
+                                        let is_paint = *state.is_paint_mode.lock().await;
+
+                                        // ONLY reposition if we are NOT in full-screen modes
+                                        if !is_pet && !is_paint {
+                                            let x = (position.x as i32) - (size.width as i32 / 2);
+                                            let pos = tauri::PhysicalPosition::new(x, 30);
+
+                                            // Save position for future unmaximized restorations
+                                            let mut last_pos = state.last_tray_pos.lock().await;
+                                            *last_pos = Some(pos);
+
+                                            let _ = window_clone.set_position(pos);
+                                        }
+                                    });
                                 }
                                 let _ = window.show();
                                 let _ = window.set_focus();

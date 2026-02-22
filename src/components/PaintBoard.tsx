@@ -150,17 +150,12 @@ const PaintBoard = ({ onToggleSidebar, onClose }: { onToggleSidebar: (show: bool
 
     // Initial window setup (Mount/Unmount only)
     useEffect(() => {
-        const setup = async () => {
-            await invoke('toggle_paint_mode', { active: true });
-            onToggleSidebar(false);
-        };
-        setup();
-
+        // Window state is now coordinated by App.tsx
         return () => {
-            invoke('toggle_paint_mode', { active: false });
-            onToggleSidebar(true);
+            // Insurance for cleanup if needed, though App.tsx should handle it
+            // invoke('toggle_paint_mode', { active: false });
         };
-    }, [onToggleSidebar]);
+    }, []);
 
     // Independent Keyboard Listeners
     useEffect(() => {
