@@ -533,10 +533,10 @@ async fn schedule_shutdown(
         tauri::async_runtime::spawn(async move {
             tokio::select! {
                 _ = tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs)) => {
-                    // Time elapsed naturally, execute shutdown
-                    let _ = std::process::Command::new("shutdown")
-                        .arg("-h")
-                        .arg("now")
+                    // Time elapsed naturally, execute shutdown using AppleScript (no root needed)
+                    let _ = std::process::Command::new("osascript")
+                        .arg("-e")
+                        .arg("tell application \"System Events\" to shut down")
                         .output();
 
                     // Cleanup window exactly before system dies
