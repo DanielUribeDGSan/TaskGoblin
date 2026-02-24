@@ -38,6 +38,9 @@ const PaintPropertiesPanel = memo(function PaintPropertiesPanel({
     onReverseOrder,
     onHide,
     t,
+    textInput,
+    setTextInput,
+    onAddText,
 }: {
     color: string;
     setColor: (c: string) => void;
@@ -50,6 +53,9 @@ const PaintPropertiesPanel = memo(function PaintPropertiesPanel({
     onReverseOrder: () => void;
     onHide: () => void;
     t: (key: string) => string;
+    textInput: string;
+    setTextInput: (s: string) => void;
+    onAddText: () => void;
 }) {
     return (
         <div className="paint-properties-anchor">
@@ -72,21 +78,44 @@ const PaintPropertiesPanel = memo(function PaintPropertiesPanel({
                     </div>
                 </div>
                 {tool === 'text' && (
-                    <div className="prop-section">
-                        <label htmlFor="size-btns">{t('paint.font_size')}</label>
-                        <div id="size-btns" className="size-btns">
-                            {[16, 24, 32, 48].map(size => (
-                                <button
-                                    key={size}
-                                    type="button"
-                                    className={`size-btn ${thickness === size / 5 ? 'active' : ''}`}
-                                    onClick={() => setThickness(size / 5)}
-                                >
-                                    {size === 16 ? 'S' : size === 24 ? 'M' : size === 32 ? 'L' : 'XL'}
+                    <>
+                        <div className="prop-section">
+                            <label htmlFor="text-input">{t('paint.text')}</label>
+                            <div className="sidebar-text-input-wrapper">
+                                <textarea
+                                    id="text-input"
+                                    className="sidebar-text-area"
+                                    value={textInput}
+                                    onChange={(e) => setTextInput(e.target.value)}
+                                    placeholder={t('paint.placeholder_text')}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            onAddText();
+                                        }
+                                    }}
+                                />
+                                <button type="button" className="add-text-btn" onClick={onAddText}>
+                                    {t('paint.add_text')}
                                 </button>
-                            ))}
+                            </div>
                         </div>
-                    </div>
+                        <div className="prop-section">
+                            <label htmlFor="size-btns">{t('paint.font_size')}</label>
+                            <div id="size-btns" className="size-btns">
+                                {[16, 24, 32, 48].map(size => (
+                                    <button
+                                        key={size}
+                                        type="button"
+                                        className={`size-btn ${thickness === size / 5 ? 'active' : ''}`}
+                                        onClick={() => setThickness(size / 5)}
+                                    >
+                                        {size === 16 ? 'S' : size === 24 ? 'M' : size === 32 ? 'L' : 'XL'}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </>
                 )}
                 <div className="prop-section">
                     <label htmlFor="thickness-range">{t('paint.thickness')}: {thickness}</label>
@@ -96,7 +125,6 @@ const PaintPropertiesPanel = memo(function PaintPropertiesPanel({
                     <label htmlFor="opacity-range">{t('paint.opacity')}: {Math.round(opacity * 100)}%</label>
                     <input id="opacity-range" type="range" min="0.1" max="1" step="0.1" value={opacity} onChange={(e) => setOpacity(Number(e.target.value))} />
                 </div>
-
             </div>
         </div>
     );
@@ -105,11 +133,10 @@ const PaintPropertiesPanel = memo(function PaintPropertiesPanel({
 const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => string }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const canvasPreviewRef = useRef<HTMLCanvasElement>(null);
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
     const elementsRef = useRef<PaintElement[]>([]);
     const [elements, setElements] = useState<PaintElement[]>([]);
     elementsRef.current = elements;
-    const [tool, setTool] = useState<'pencil' | 'pen' | 'marker' | 'brush' | 'eraser' | 'text' | 'rect' | 'circle' | 'move'>('pencil');
+    const [tool, setTool] = useState<ToolType>('pencil');
     const [color, setColor] = useState('#ff0000');
     const [thickness, setThickness] = useState(3);
     const [opacity, setOpacity] = useState(1);
@@ -118,10 +145,11 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [selectionBox, setSelectionBox] = useState<{ start: Point; current: Point } | null>(null);
     const [previewElement, setPreviewElement] = useState<PaintElement | null>(null);
-    const [activeTextId, setActiveTextId] = useState<string | null>(null);
     const [startPos, setStartPos] = useState<Point | null>(null);
     const [resizeHandle, setResizeHandle] = useState<ResizeHandle>(null);
     const [isPanelVisible, setIsPanelVisible] = useState(true);
+    const [textInput, setTextInput] = useState('');
+    const lastMousePos = useRef<Point>({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
 
     const getResizeHandle = (x: number, y: number, el: PaintElement): ResizeHandle => {
         if (el.type !== 'rect' && el.type !== 'circle' && el.type !== 'text') return null;
@@ -131,10 +159,10 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
         const ey = el.y || 0;
         const pad = 10;
 
-        const left = Math.min(ex, ex + (el.type === 'text' ? (el.width || 180) : width));
-        const right = Math.max(ex, ex + (el.type === 'text' ? (el.width || 180) : width));
-        const top = Math.min(ey, ey + (el.type === 'text' ? 0 : height));
-        const bottom = Math.max(ey, ey + (el.type === 'text' ? (el.fontSize || 20) : height));
+        const left = Math.min(ex, ex + width);
+        const right = Math.max(ex, ex + width);
+        const top = Math.min(ey, ey + height);
+        const bottom = Math.max(ey, ey + height);
 
         if (Math.abs(x - left) < pad && Math.abs(y - top) < pad) return 'nw';
         if (Math.abs(x - right) < pad && Math.abs(y - top) < pad) return 'ne';
@@ -147,19 +175,10 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
         return null;
     };
 
-    // Initial window setup (Mount/Unmount only)
-    useEffect(() => {
-        // Window state is now coordinated by App.tsx
-        return () => {
-            // Insurance for cleanup if needed, though App.tsx should handle it
-            // invoke('toggle_paint_mode', { active: false });
-        };
-    }, []);
-
     // Independent Keyboard Listeners
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0 && !activeTextId) {
+            if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0) {
                 setElements(prev => prev.filter(el => !selectedIds.includes(el.id)));
                 setSelectedIds([]);
             }
@@ -167,7 +186,7 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedIds, activeTextId]);
+    }, [selectedIds]);
 
     // Reset inline cursor when tool changes so CSS can take over
     useEffect(() => {
@@ -179,27 +198,45 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
         }
     }, [tool, lastTool]);
 
-    // Explicitly focus textarea when it appears
-    useEffect(() => {
-        if (activeTextId && textareaRef.current) {
-            textareaRef.current.focus();
-            // Move cursor to end
-            const length = textareaRef.current.value.length;
-            textareaRef.current.setSelectionRange(length, length);
+    const measureText = (text: string, fontSize: number): number => {
+        const canvas = canvasRef.current || document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return text.length * (fontSize * 0.6); // Fallback
+        ctx.font = `${fontSize}px sans-serif`;
+        return ctx.measureText(text).width;
+    };
+
+    const addTextToCanvas = (x: number, y: number, text?: string) => {
+        const finalText = text || window.prompt(t('paint.placeholder_text'));
+        if (finalText) {
+            const fontSize = thickness * 5;
+            const width = measureText(finalText, fontSize);
+            const newText: PaintElement = {
+                id: Date.now().toString(),
+                type: 'text',
+                x,
+                y,
+                text: finalText,
+                color,
+                thickness: 0,
+                opacity,
+                fontSize,
+                width,
+                height: fontSize,
+            };
+            setElements(prev => [...prev, newText]);
+            if (text) setTextInput(''); // Clear sidebar input
         }
-    }, [activeTextId]);
+    };
 
     const handleMouseDown = (e: React.MouseEvent) => {
-        // Prevent drawing when clicking on UI panels
         if (e.target !== canvasPreviewRef.current) return;
-
         const rect = canvasPreviewRef.current?.getBoundingClientRect();
         if (!rect) return;
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
         if (tool === 'move') {
-            // Priority 1: Check if clicking a resize handle of an already selected single element
             if (selectedIds.length === 1) {
                 const el = elements.find(e => e.id === selectedIds[0]);
                 if (el) {
@@ -212,19 +249,16 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
                 }
             }
 
-            // Priority 2: Find clicked element (reverse order for top-most)
             const clicked = [...elements].reverse().find(el => {
                 if (el.type === 'rect' || el.type === 'circle' || el.type === 'text') {
-                    const width = el.type === 'text' ? (el.width || 180) : (el.width || 0);
+                    const width = el.width || 0;
                     const height = el.type === 'text' ? (el.fontSize || 20) : (el.height || 0);
                     const ex = el.x || 0;
                     const ey = el.y || 0;
-
                     const left = Math.min(ex, ex + width);
                     const right = Math.max(ex, ex + width);
                     const top = Math.min(ey, ey + height);
                     const bottom = Math.max(ey, ey + height);
-
                     return x >= left && x <= right && y >= top && y <= bottom;
                 }
                 if (el.points) {
@@ -245,7 +279,6 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
                 } else if (!selectedIds.includes(clicked.id)) {
                     setSelectedIds([clicked.id]);
                 }
-                // Check if we immediately started on a handle of the newly clicked
                 const handle = getResizeHandle(x, y, clicked);
                 if (handle) setResizeHandle(handle);
                 setStartPos({ x, y });
@@ -257,23 +290,8 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
         }
 
         setStartPos({ x, y });
-
         if (tool === 'text') {
-            const text = window.prompt(t('paint.placeholder_text'));
-            if (text) {
-                const newText: PaintElement = {
-                    id: Date.now().toString(),
-                    type: 'text',
-                    x,
-                    y,
-                    text: text,
-                    color,
-                    thickness: 0,
-                    opacity,
-                    fontSize: thickness * 5,
-                };
-                setElements(prev => [...prev, newText]);
-            }
+            addTextToCanvas(x, y);
             return;
         }
 
@@ -300,7 +318,6 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
         if (tool === 'move') {
             const canvas = canvasPreviewRef.current;
             if (canvas && !startPos) {
-                // Dynamic cursor
                 let newCursor = 'default';
                 if (selectedIds.length === 1) {
                     const el = elements.find(e => e.id === selectedIds[0]);
@@ -326,14 +343,14 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
                         if (el.id === selectedIds[0]) {
                             let { x: ex = 0, y: ey = 0, width: ew = 100, height: eh = 30 } = el;
                             if (el.type === 'text') eh = el.fontSize || 20;
-
                             if (resizeHandle.includes('e')) ew += dx;
                             if (resizeHandle.includes('s')) eh += dy;
                             if (resizeHandle.includes('w')) { ex += dx; ew -= dx; }
                             if (resizeHandle.includes('n')) { ey += dy; eh -= dy; }
-
                             if (el.type === 'text') {
-                                return { ...el, x: ex, y: ey, fontSize: Math.max(10, eh), width: Math.max(20, ew) };
+                                const newFontSize = Math.max(10, eh);
+                                const newWidth = measureText(el.text || '', newFontSize);
+                                return { ...el, x: ex, y: ey, fontSize: newFontSize, width: newWidth, height: newFontSize };
                             }
                             return { ...el, x: ex, y: ey, width: Math.max(5, ew), height: Math.max(5, eh) };
                         }
@@ -359,19 +376,13 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
             return;
         }
 
+        lastMousePos.current = { x, y };
         if (!startPos || !previewElement) return;
 
         if (tool === 'rect' || tool === 'circle') {
-            setPreviewElement(prev => prev ? {
-                ...prev,
-                width: x - startPos.x,
-                height: y - startPos.y
-            } : null);
+            setPreviewElement(prev => prev ? { ...prev, width: x - startPos.x, height: y - startPos.y } : null);
         } else if (['pencil', 'pen', 'marker', 'brush', 'eraser'].includes(tool)) {
-            setPreviewElement(prev => prev ? {
-                ...prev,
-                points: [...(prev.points || []), { x, y }]
-            } : null);
+            setPreviewElement(prev => prev ? { ...prev, points: [...(prev.points || []), { x, y }] } : null);
         }
     };
 
@@ -381,7 +392,6 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
             const maxX = Math.max(selectionBox.start.x, selectionBox.current.x);
             const minY = Math.min(selectionBox.start.y, selectionBox.current.y);
             const maxY = Math.max(selectionBox.start.y, selectionBox.current.y);
-
             const newlySelected = elements.filter(el => {
                 let ex = el.x || 0;
                 let ey = el.y || 0;
@@ -391,7 +401,6 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
                 }
                 return ex >= minX && ex <= maxX && ey >= minY && ey <= maxY;
             }).map(el => el.id);
-
             setSelectedIds(newlySelected);
             setSelectionBox(null);
         }
@@ -409,7 +418,6 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
             setElements([]);
             setSelectedIds([]);
             setPreviewElement(null);
-            setActiveTextId(null);
         });
     }, []);
 
@@ -421,31 +429,29 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
         onClose();
     };
 
-    // Draw Main Elements (Only when elements change)
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         elements.forEach(el => drawElement(ctx, el));
     }, [elements, selectedIds]);
 
-    // Draw Previews (Active Tool / Marquee)
     useEffect(() => {
         const canvas = canvasPreviewRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
 
         let animationFrameId: number;
         const render = () => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            if (previewElement) {
-                drawElement(ctx, previewElement);
-            }
-
+            if (previewElement) drawElement(ctx, previewElement);
             if (tool === 'move' && selectionBox) {
                 ctx.setLineDash([5, 5]);
                 ctx.strokeStyle = 'rgba(0, 122, 255, 0.5)';
@@ -463,7 +469,6 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
         return () => cancelAnimationFrame(animationFrameId);
     }, [previewElement, selectionBox, tool]);
 
-    // Resize handler: only on mount and real window resize, so clearing canvas doesn't trigger reflow and squash the properties panel
     useEffect(() => {
         const handleResize = () => {
             [canvasRef.current, canvasPreviewRef.current].forEach(canvas => {
@@ -478,7 +483,6 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
                 elementsRef.current.forEach(el => drawElement(ctx, el));
             }
         };
-        handleResize();
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
@@ -495,26 +499,22 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
         if (el.type === 'eraser') {
             ctx.globalCompositeOperation = 'destination-out';
             ctx.strokeStyle = 'rgba(0,0,0,1)';
-            ctx.lineWidth = el.thickness * 4; // Make eraser much thicker than the brush
+            ctx.lineWidth = el.thickness * 4;
         } else {
             ctx.globalCompositeOperation = 'source-over';
         }
 
         if (['pencil', 'pen', 'marker', 'brush', 'eraser'].includes(el.type)) {
             if (!el.points || el.points.length < 2) return;
-
             if (el.type === 'brush') {
                 ctx.shadowBlur = el.thickness;
                 ctx.shadowColor = el.color;
             } else if (el.type === 'marker') {
                 ctx.globalAlpha = el.opacity * 0.5;
             }
-
             ctx.moveTo(el.points[0].x, el.points[0].y);
             el.points.forEach(p => ctx.lineTo(p.x, p.y));
             ctx.stroke();
-
-            // Reset effects
             ctx.shadowBlur = 0;
             ctx.globalAlpha = el.opacity;
         } else if (el.type === 'rect') {
@@ -535,7 +535,6 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
         ctx.globalCompositeOperation = 'source-over';
         ctx.globalAlpha = 1;
 
-        // Selection highlight with recursive handles
         if (selectedIds.includes(el.id)) {
             ctx.setLineDash([5, 5]);
             ctx.strokeStyle = '#007AFF';
@@ -543,11 +542,10 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
             const isSingle = selectedIds.length === 1;
 
             if (el.type === 'rect' || el.type === 'circle' || el.type === 'text') {
-                const width = el.type === 'text' ? (el.width || 180) : (el.width || 0);
+                const width = el.width || 0;
                 const height = el.type === 'text' ? (el.fontSize || 20) : (el.height || 0);
                 const ex = el.x || 0;
                 const ey = el.y || 0;
-
                 const left = Math.min(ex, ex + width);
                 const right = Math.max(ex, ex + width);
                 const top = Math.min(ey, ey + height);
@@ -557,11 +555,10 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
                 ctx.setLineDash([]);
 
                 if (isSingle) {
-                    // Draw 8 Handles
                     ctx.fillStyle = '#FFFFFF';
                     ctx.strokeStyle = '#007AFF';
                     ctx.lineWidth = 2;
-                    const hs = 8; // handle size
+                    const hs = 8;
                     const points = [
                         [left - 5, top - 5], [(left + right) / 2, top - 5], [right + 5, top - 5],
                         [left - 5, (top + bottom) / 2], [right + 5, (top + bottom) / 2],
@@ -590,7 +587,6 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
     const paintUI = (
         <div className="paint-portal-root">
             <div className={`paint-container tool-${tool}`} data-paint-root>
-                {/* Dynamic Island Toolbar */}
                 <div className="paint-toolbar-wrapper">
                     <div className="paint-toolbar">
                         <div role="button" tabIndex={0} className={`tool-btn ${tool === 'pencil' ? 'active' : ''}`} onClick={() => setTool('pencil')} onKeyDown={(e) => e.key === 'Enter' && setTool('pencil')} title={t('paint.pencil')}>✏️</div>
@@ -610,53 +606,43 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
                 </div>
 
                 {!isPanelVisible && (
-                    <button
-                        className="show-panel-btn"
-                        onClick={() => setIsPanelVisible(true)}
-                        title={t('paint.show_panel')}
-                    >
-                        🎨
-                    </button>
+                    <button className="show-panel-btn" onClick={() => setIsPanelVisible(true)} title={t('paint.show_panel')}>🎨</button>
                 )}
 
-                {/* Panel rendered in separate portal below so its DOM is never touched when canvas clears */}
                 <canvas ref={canvasRef} className="paint-canvas main-canvas" />
                 <canvas
                     ref={canvasPreviewRef}
-                    width={window.innerWidth}
-                    height={window.innerHeight}
                     onMouseDown={handleMouseDown}
                     onMouseMove={handleMouseMove}
                     onMouseUp={handleMouseUp}
                     className="paint-canvas preview-canvas"
                 />
             </div>
-
-            {/* Text input portal removed in favor of window.prompt */}
         </div>
     );
-
-    const panelPortal = isPanelVisible ? createPortal(
-        <PaintPropertiesPanel
-            color={color}
-            setColor={setColor}
-            thickness={thickness}
-            setThickness={setThickness}
-            opacity={opacity}
-            setOpacity={setOpacity}
-            tool={tool}
-            onClearAll={clearAll}
-            onReverseOrder={reverseOrder}
-            onHide={() => setIsPanelVisible(false)}
-            t={t}
-        />,
-        document.body
-    ) : null;
 
     return (
         <>
             {createPortal(paintUI, document.body)}
-            {panelPortal}
+            {isPanelVisible && createPortal(
+                <PaintPropertiesPanel
+                    color={color}
+                    setColor={setColor}
+                    thickness={thickness}
+                    setThickness={setThickness}
+                    opacity={opacity}
+                    setOpacity={setOpacity}
+                    tool={tool}
+                    onClearAll={clearAll}
+                    onReverseOrder={reverseOrder}
+                    onHide={() => setIsPanelVisible(false)}
+                    t={t}
+                    textInput={textInput}
+                    setTextInput={setTextInput}
+                    onAddText={() => addTextToCanvas(lastMousePos.current.x, lastMousePos.current.y, textInput)}
+                />,
+                document.body
+            )}
         </>
     );
 };

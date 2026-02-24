@@ -1841,3 +1841,58 @@ body.dark ::-webkit-calendar-picker-indicator {
     transform: rotate(360deg);
   }
 }
+
+/* Sidebar Text Input */
+.sidebar-text-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.sidebar-text-area {
+  width: 100%;
+  min-height: 80px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  color: #fff;
+  padding: 12px;
+  font-size: 14px;
+  line-height: 1.4;
+  resize: vertical;
+  outline: none;
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+
+.sidebar-text-area:focus {
+  border-color: #007AFF;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+}
+
+.sidebar-text-area::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.add-text-btn {
+  width: 100%;
+  padding: 12px;
+  background: #007AFF;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.add-text-btn:hover {
+  background: #0066D6;
+  transform: translateY(-1px);
+}
+
+.add-text-btn:active {
+  transform: translateY(0);
+}

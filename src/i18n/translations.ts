@@ -106,6 +106,7 @@ export const translations = {
             trazo: "Stroke",
             hide_panel: "Hide Properties",
             show_panel: "Show Properties",
+            add_text: "Add Text",
         },
         pet: {
             title: "Puppy Mode 🐶",
@@ -259,6 +260,7 @@ export const translations = {
             trazo: "Trazo",
             hide_panel: "Ocultar Propiedades",
             show_panel: "Mostrar Propiedades",
+            add_text: "Agregar Texto",
         },
         pet: {
             title: "Modo Perrito 🐶",
