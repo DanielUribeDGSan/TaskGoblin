@@ -10,6 +10,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import PetAgent from './components/PetAgent';
 import ColorExtractor from './components/ColorExtractor';
 import PaintBoard from './components/PaintBoard';
+import ImageConverter from './components/ImageConverter';
 import "./App.css";
 
 // SVG Icons can be added here if needed, but we'll use emojis/images for simplicity as per mockup
@@ -55,6 +56,10 @@ const ColorIcon = () => (
 
 const PaintIcon = () => (
   <img src="/icon/paint.gif" alt="Paint" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
+);
+
+const ImageIcon = () => (
+  <img src="/icon/camera.gif" alt="Image" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
 );
 
 const BackIcon = () => (
@@ -797,6 +802,17 @@ function App() {
                   </div>
                 )}
 
+                {(!appSearchTerm || "image converter".includes(appSearchTerm.toLowerCase()) || "gif".includes(appSearchTerm.toLowerCase())) && (
+                  <div className="list-item" onClick={() => setActiveTab("ImageConverter")}>
+                    <div className="icon">
+                      <div className="icon">
+                        <ImageIcon />
+                      </div>
+                    </div>
+                    <span>Image Converter</span>
+                  </div>
+                )}
+
                 {(!appSearchTerm || "profiles".includes(appSearchTerm.toLowerCase()) || "modes".includes(appSearchTerm.toLowerCase())) && (
                   <>
                     <div className="section-label" style={{ marginTop: '20px' }} data-tauri-drag-region>PROFILES</div>
@@ -931,7 +947,7 @@ function App() {
             {activeTab === "Settings" && (
               <div className="wa-form-container">
                 <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
-                  <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Volver
+                  <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Back
                 </div>
                 <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
                   App configuration and behavior.
@@ -947,7 +963,7 @@ function App() {
                   </div>
                 </div>
 
-                <div className="section-label" style={{ marginTop: '20px' }}>SOPORTE</div>
+                <div className="section-label" style={{ marginTop: '20px' }}>SUPPORT</div>
                 <div className="list-item" onClick={handleRepairPermissions}>
                   <div className="icon">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
@@ -963,7 +979,7 @@ function App() {
             {activeTab === "WhatsApp" && (
               <div className="wa-form-container">
                 <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
-                  <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Volver
+                  <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Back
                 </div>
 
                 <ContactPicker
@@ -1018,10 +1034,6 @@ function App() {
                   />
                 </div>
 
-
-
-
-
                 {contactError && (
                   <div style={{ textAlign: 'center', padding: '10px', fontSize: '12px', color: '#ff5555' }}>
                     ❌ Error: {contactError}
@@ -1035,7 +1047,6 @@ function App() {
                   placeholder="Type your message here..."
                   style={{ minHeight: '80px', resize: 'vertical' }}
                 />
-
 
                 <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                   <div style={{ flex: 1, position: 'relative' }}>
@@ -1071,6 +1082,15 @@ function App() {
                 <button className="wa-submit-btn" onClick={handleScheduleWa} style={{ marginTop: '16px' }}>
                   Schedule
                 </button>
+              </div>
+            )}
+
+            {activeTab === "ImageConverter" && (
+              <div className="wa-form-container">
+                <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                  <BackIcon /> <span style={{ marginLeft: '8px' }}>Back</span>
+                </div>
+                <ImageConverter showToast={showToast} />
               </div>
             )}
           </div>

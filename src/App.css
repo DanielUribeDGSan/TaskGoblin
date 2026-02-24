@@ -454,6 +454,25 @@ body.dark ::-webkit-calendar-picker-indicator {
   margin-bottom: 4px;
 }
 
+.wa-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wa-input-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.wa-input {
+  width: 100%;
+  background: var(--bg-secondary) !important;
+  border: 1px solid var(--border-color);
+}
+
 .wa-submit-btn {
   width: 100%;
   background: var(--accent-color);

@@ -690,6 +690,138 @@ async fn get_shutdown_time(state: State<'_, AppState>) -> Result<serde_json::Val
 }
 
 #[tauri::command]
+async fn process_image(
+    input_path: String,
+    output_path: String,
+    format: String,
+    width: Option<u32>,
+    height: Option<u32>,
+    quality: Option<u8>,
+    optimize: bool,
+) -> Result<(), String> {
+    use image::ImageFormat;
+    use std::fs::File;
+
+    println!(
+        "Processing image: {} to {} as {}",
+        input_path, output_path, format
+    );
+
+    // Load image
+    let img = image::open(&input_path).map_err(|e| format!("Failed to open image: {}", e))?;
+
+    // Resize if requested
+    let img = if width.is_some() || height.is_some() {
+        let (w, h) = match (width, height) {
+            (Some(w), Some(h)) => (w, h),
+            (Some(w), None) => {
+                let ratio = w as f32 / img.width() as f32;
+                (w, (img.height() as f32 * ratio) as u32)
+            }
+            (None, Some(h)) => {
+                let ratio = h as f32 / img.height() as f32;
+                ((img.width() as f32 * ratio) as u32, h)
+            }
+            _ => unreachable!(),
+        };
+        img.resize(w, h, image::imageops::FilterType::Lanczos3)
+    } else {
+        img
+    };
+
+    let output_file =
+        File::create(&output_path).map_err(|e| format!("Failed to create output file: {}", e))?;
+
+    match format.to_lowercase().as_str() {
+        "jpg" | "jpeg" => {
+            let q = if optimize { 75 } else { quality.unwrap_or(80) };
+            let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(output_file, q);
+            encoder
+                .encode_image(&img)
+                .map_err(|e| format!("Failed to encode JPEG: {}", e))?;
+        }
+        "png" => {
+            img.write_to(&mut std::io::BufWriter::new(output_file), ImageFormat::Png)
+                .map_err(|e| format!("Failed to write PNG: {}", e))?;
+        }
+        "webp" => {
+            // WebP encoding with quality/optimize
+            let q = if optimize { 75 } else { quality.unwrap_or(80) };
+            img.save_with_format(&output_path, ImageFormat::WebP)
+                .map_err(|e| format!("Failed to write WebP: {}", e))?;
+            // Note: the 'image' crate doesn't expose quality easily for WebP via write_to,
+            // but save_with_format uses default values. For more control we'd need a dedicated encoder.
+            // For now, this is a good baseline.
+        }
+        "avif" => {
+            img.write_to(&mut std::io::BufWriter::new(output_file), ImageFormat::Avif)
+                .map_err(|e| format!("Failed to write AVIF: {}", e))?;
+        }
+        "bmp" => {
+            img.write_to(&mut std::io::BufWriter::new(output_file), ImageFormat::Bmp)
+                .map_err(|e| format!("Failed to write BMP: {}", e))?;
+        }
+        "gif" => {
+            img.write_to(&mut std::io::BufWriter::new(output_file), ImageFormat::Gif)
+                .map_err(|e| format!("Failed to write GIF: {}", e))?;
+        }
+        "tiff" => {
+            img.write_to(&mut std::io::BufWriter::new(output_file), ImageFormat::Tiff)
+                .map_err(|e| format!("Failed to write TIFF: {}", e))?;
+        }
+        "heic" | "heif" => {
+            // MacOS native conversion using sips
+            // Since we already resized 'img' if requested, we should save it to a temp folder first
+            // or if no resize was requested, just call sips on the input file.
+
+            use std::process::Command;
+
+            // If we resized, we need to export the resized version to a temp file first
+            if width.is_some() || height.is_some() {
+                let temp_path = format!("{}.tmp.png", output_path);
+                img.write_to(
+                    &mut std::io::BufWriter::new(
+                        File::create(&temp_path).map_err(|e| e.to_string())?,
+                    ),
+                    ImageFormat::Png,
+                )
+                .map_err(|e| format!("Failed to write temp PNG for HEIC conversion: {}", e))?;
+
+                let output = Command::new("sips")
+                    .args(["-s", "format", "heic", &temp_path, "--out", &output_path])
+                    .output()
+                    .map_err(|e| format!("Sips command failed: {}", e))?;
+
+                let _ = std::fs::remove_file(temp_path);
+
+                if !output.status.success() {
+                    return Err(format!(
+                        "sips failed: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    ));
+                }
+            } else {
+                // No resize needed, just convert input to output directly
+                let output = Command::new("sips")
+                    .args(["-s", "format", "heic", &input_path, "--out", &output_path])
+                    .output()
+                    .map_err(|e| format!("Sips command failed: {}", e))?;
+
+                if !output.status.success() {
+                    return Err(format!(
+                        "sips failed: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    ));
+                }
+            }
+        }
+        _ => return Err(format!("Unsupported output format: {}", format)),
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String, String> {
     #[cfg(target_os = "macos")]
     {
@@ -1155,6 +1287,7 @@ pub fn run() {
             process_screenshot_ocr,
             convert_pdf_to_word,
             set_dialog_open,
+            process_image,
             test_toast
         ])
         .setup(|app| {
