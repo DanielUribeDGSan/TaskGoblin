@@ -502,6 +502,7 @@ const PaintBoard = ({ onClose }: { onClose: () => void }) => {
         if (el.type === 'eraser') {
             ctx.globalCompositeOperation = 'destination-out';
             ctx.strokeStyle = 'rgba(0,0,0,1)';
+            ctx.lineWidth = el.thickness * 4; // Make eraser much thicker than the brush
         } else {
             ctx.globalCompositeOperation = 'source-over';
         }

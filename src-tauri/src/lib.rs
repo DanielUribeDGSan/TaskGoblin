@@ -226,7 +226,7 @@ fn set_ignore_cursor_events(window: tauri::Window, ignore: bool) -> Result<(), S
 }
 
 #[tauri::command]
-async fn repair_permissions() -> Result<(), String> {
+async fn repair_permissions(app_handle: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         use std::process::Command;
@@ -248,6 +248,9 @@ async fn repair_permissions() -> Result<(), String> {
             .arg("All")
             .arg(bundle_id)
             .output();
+
+        // Restart the app as requested
+        tauri::process::restart(&app_handle.env());
 
         Ok(())
     }

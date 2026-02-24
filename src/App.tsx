@@ -324,6 +324,15 @@ function App() {
     };
   }, []);
 
+  // Clear WhatsApp fields when entering the tab as requested
+  useEffect(() => {
+    if (activeTab === "WhatsApp") {
+      setWaPhone("");
+      setWaMsg("");
+      setWaDateTime(new Date());
+    }
+  }, [activeTab]);
+
   // Centralized Coordination for Interactivity
   useEffect(() => {
     const syncInteractivity = async () => {
@@ -471,9 +480,8 @@ function App() {
 
   const handleRepairPermissions = async () => {
     try {
-      showToast("Repairing permissions... 🛠️");
+      showToast("Repairing permissions... 🛠️ App will restart.");
       await invoke("repair_permissions");
-      showToast("Done! Please RESTART the app and grant permissions again. ✅");
     } catch (err) {
       showToast("Error: " + err);
     }
@@ -1004,7 +1012,7 @@ function App() {
                   <input
                     type="text"
                     value={waPhone}
-                    onChange={e => setWaPhone(e.target.value)}
+                    onChange={e => setWaPhone(e.target.value.replace(/\D/g, ""))}
                     placeholder="443 123 4567"
                     style={{ flex: 1 }}
                   />
