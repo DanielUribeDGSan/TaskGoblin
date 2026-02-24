@@ -734,7 +734,7 @@ async fn process_image(
 
     match format.to_lowercase().as_str() {
         "jpg" | "jpeg" => {
-            let q = if optimize { 75 } else { quality.unwrap_or(80) };
+            let q = if optimize { 70 } else { quality.unwrap_or(80) };
             let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(output_file, q);
             encoder
                 .encode_image(&img)
@@ -756,11 +756,15 @@ async fn process_image(
             }
         }
         "webp" => {
-            // WebP encoding
-            // Note: image crate 0.24.7 doesn't expose quality easily via JpegEncoder-style API for WebP.
-            // save_with_format uses default lossy encoding.
-            img.save_with_format(&output_path, ImageFormat::WebP)
-                .map_err(|e| format!("Failed to write WebP: {}", e))?;
+            use image::codecs::webp::{WebPEncoder, WebPQuality};
+
+            let q = if optimize { 75 } else { quality.unwrap_or(80) };
+            let mut writer = std::io::BufWriter::new(output_file);
+            let encoder = WebPEncoder::new_with_quality(&mut writer, WebPQuality::lossy(q));
+
+            encoder
+                .encode(img.as_bytes(), img.width(), img.height(), img.color())
+                .map_err(|e| format!("Failed to encode WebP: {}", e))?;
         }
         "avif" => {
             let (width, height) = (img.width() as usize, img.height() as usize);
