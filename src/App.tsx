@@ -173,6 +173,7 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isAutostartEnabled, setIsAutostartEnabled] = useState(false);
   const [pdfConversion, setPdfConversion] = useState<{ active: boolean; step: string; progress: number }>({ active: false, step: "", progress: 0 });
+  const [isRepairing, setIsRepairing] = useState(false);
   const [appSearchTerm, setAppSearchTerm] = useState("");
   const [closeAppsConfirm, setCloseAppsConfirm] = useState<'all' | 'leisure' | 'heavy' | null>(null);
   const [scheduleShutdownPicker, setScheduleShutdownPicker] = useState(false);
@@ -485,10 +486,22 @@ function App() {
 
   const handleRepairPermissions = async () => {
     try {
-      showToast("Repairing permissions... 🛠️ App will restart.");
+      setIsRepairing(true);
       await invoke("repair_permissions");
+
+      const { ask } = await import('@tauri-apps/plugin-dialog');
+      const confirmed = await ask(
+        "Permissions reset successfully! A complete restart is required to apply the changes. Should we restart now?",
+        { title: "Repair Complete", kind: "info" }
+      );
+
+      if (confirmed) {
+        await invoke("restart_app");
+      }
     } catch (err) {
-      showToast("Error: " + err);
+      showToast("Error repairing permissions: " + String(err));
+    } finally {
+      setIsRepairing(false);
     }
   };
 
@@ -1155,6 +1168,15 @@ function App() {
           </div>
         )}
       </div>
+      {isRepairing && (
+        <div className="loading-overlay-full">
+          <div className="loading-card">
+            <div className="loading-spinner"></div>
+            <h3>Repairing Permissions...</h3>
+            <p>Cleaning macOS security entries. Please wait a few seconds.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

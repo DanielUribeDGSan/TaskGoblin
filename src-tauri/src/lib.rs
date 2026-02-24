@@ -226,11 +226,15 @@ fn set_ignore_cursor_events(window: tauri::Window, ignore: bool) -> Result<(), S
 }
 
 #[tauri::command]
-async fn repair_permissions(app_handle: tauri::AppHandle) -> Result<(), String> {
+async fn repair_permissions(_app_handle: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         use std::process::Command;
+        use std::thread;
+        use std::time::Duration;
         let bundle_id = "com.taskgoblin.app";
+
+        println!("Repairing permissions for {}", bundle_id);
 
         // Reset TCC entries
         let _ = Command::new("tccutil")
@@ -249,8 +253,8 @@ async fn repair_permissions(app_handle: tauri::AppHandle) -> Result<(), String> 
             .arg(bundle_id)
             .output();
 
-        // Restart the app as requested
-        tauri::process::restart(&app_handle.env());
+        // Wait for macOS to process the resets
+        thread::sleep(Duration::from_secs(5));
 
         Ok(())
     }
@@ -258,6 +262,11 @@ async fn repair_permissions(app_handle: tauri::AppHandle) -> Result<(), String> 
     {
         Ok(())
     }
+}
+
+#[tauri::command]
+fn restart_app(app_handle: tauri::AppHandle) {
+    tauri::process::restart(&app_handle.env());
 }
 
 #[tauri::command]
@@ -1327,6 +1336,7 @@ pub fn run() {
             extract_text_from_screen,
             write_to_clipboard,
             repair_permissions,
+            restart_app,
             process_screenshot_ocr,
             convert_pdf_to_word,
             set_dialog_open,
