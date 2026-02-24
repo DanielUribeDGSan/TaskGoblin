@@ -656,7 +656,7 @@ function App() {
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button className="theme-toggle-btn" onClick={() => setLanguage(language === 'en' ? 'es' : 'en')} title={language === 'en' ? 'Cambiar a Español' : 'Switch to English'}>
-                <span style={{ fontSize: '10px', fontWeight: 'bold' }}>{language.toUpperCase()}</span>
+                <span style={{ fontSize: '10px', fontWeight: 'bold' }}>{language === 'en' ? 'ES' : 'EN'}</span>
               </button>
               <button className="theme-toggle-btn" onClick={() => setIsDarkMode(!isDarkMode)}>
                 {isDarkMode ? <LightModeIcon /> : <DarkModeIcon />}
