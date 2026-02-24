@@ -25,9 +25,9 @@ const MouseIcon = () => (
   <img src="/icon/move.gif" alt="Move Mouse" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
 );
 
-const PetIcon = () => (
-  <img src="/icon/fox.gif" alt="Pet" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
-);
+// const PetIcon = () => (
+//   <img src="/icon/fox.gif" alt="Pet" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
+// );
 
 const MsgIcon = () => (
   <img src="/icon/chat.gif" alt="Move Mouse" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
@@ -285,6 +285,11 @@ function App() {
       setIsSidebarOpen(true);
     });
 
+    const unlistenSidebar = listen("open-sidebar", () => {
+      console.log("Open sidebar event received");
+      setIsSidebarOpen(true);
+    });
+
     // Listen for backend-triggered toasts (captures)
     const unlistenToast = listen<{ message: string; title: string }>("show-toast", (event) => {
       setIsSidebarOpen(true); // Open sidebar automatically for the alert
@@ -313,10 +318,26 @@ function App() {
       window.removeEventListener("keydown", handleKeyDown);
       unregister('Control+Alt+2').catch(console.error);
       unlistenPromise.then(unlisten => unlisten());
+      unlistenSidebar.then(u => u());
       unlistenToast.then(u => u());
       unlistenPdf.then(fn => fn());
     };
   }, []);
+
+  // Centralized Coordination for Interactivity
+  useEffect(() => {
+    const syncInteractivity = async () => {
+      try {
+        // ONLY ignore cursor events in Pet Mode when the sidebar is closed.
+        // In Paint Mode or Normal Mode, we ALWAYS want to capture clicks.
+        const shouldIgnore = isPetMode && !isSidebarOpen;
+        await invoke("set_ignore_cursor_events", { ignore: shouldIgnore });
+      } catch (err) {
+        console.error("Failed to sync interactivity:", err);
+      }
+    };
+    syncInteractivity();
+  }, [isSidebarOpen, isPetMode, isPaintActive]);
 
   const togglePetMode = async () => {
     const newMode = !isPetMode;
@@ -448,6 +469,16 @@ function App() {
     }
   };
 
+  const handleRepairPermissions = async () => {
+    try {
+      showToast("Repairing permissions... 🛠️");
+      await invoke("repair_permissions");
+      showToast("Done! Please RESTART the app and grant permissions again. ✅");
+    } catch (err) {
+      showToast("Error: " + err);
+    }
+  };
+
   const showToast = (message: string) => {
     setToast({ message, visible: true });
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
@@ -474,22 +505,20 @@ function App() {
   const handleScheduleWa = async () => {
     try {
       if (!waPhone || !waMsg || !waDateTime) {
-        alert("Please fill in all fields.");
+        showToast("Please fill in all fields.");
         return;
       }
 
       const finalPhone = sanitizePhone(waPhone, countryCode);
       if (!finalPhone.startsWith("+")) {
-        alert("Please ensure the number has a country code (e.g., +52)");
+        showToast("Please ensure the number has a country code (e.g., +52)");
         return;
       }
 
       const now = new Date();
-      const target = waDateTime;
-
-      const delayMs = target.getTime() - now.getTime();
+      const delayMs = waDateTime.getTime() - now.getTime();
       if (delayMs < 0) {
-        alert("The selected date and time has already passed. Please choose a future time.");
+        showToast("The selected date and time has already passed. Please choose a future time.");
         return;
       }
 
@@ -519,13 +548,11 @@ function App() {
     <div className={`app-root ${(isPetMode || isPaintActive) ? 'full-screen' : ''}`}>
       {isPaintActive && (
         <PaintBoard
-          onToggleSidebar={setIsSidebarOpen}
           onClose={() => togglePaintMode(false)}
         />
       )}
       <div
         className={`app-wrapper ${!isSidebarOpen ? 'sidebar-closed' : ''} ${isPetMode ? 'pet-mode-active' : ''} ${isPaintActive ? 'paint-mode-active' : ''}`}
-        style={{ pointerEvents: 'auto' }}
       >
         {isPetMode && !isSidebarOpen && (
           <button
@@ -642,7 +669,7 @@ function App() {
                   </div>
                 )}
 
-                {"cat".includes(appSearchTerm.toLowerCase()) && (
+                {/* {"cat".includes(appSearchTerm.toLowerCase()) && (
                   <div className={`list-item ${isPetMode ? 'active' : ''}`} onClick={togglePetMode}>
                     <div className="icon"><PetIcon /></div>
                     <span>Pet Cat</span> <span className="beta-badge">BETA</span>
@@ -650,7 +677,7 @@ function App() {
                       <div className="toggle-knob" />
                     </div>
                   </div>
-                )}
+                )} */}
 
                 {"whatsapp msg".includes(appSearchTerm.toLowerCase()) && (
                   <div className="list-item" onClick={() => { setActiveTab("WhatsApp"); setAppSearchTerm(""); }}>
@@ -909,6 +936,17 @@ function App() {
                   <span>Start on Login</span>
                   <div className={`toggle-switch ${isAutostartEnabled ? "active" : ""}`}>
                     <div className="toggle-knob"></div>
+                  </div>
+                </div>
+
+                <div className="section-label" style={{ marginTop: '20px' }}>SOPORTE</div>
+                <div className="list-item" onClick={handleRepairPermissions}>
+                  <div className="icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span>Repair Permissions (Update Fix)</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>Use this if permissions fail after updating</span>
                   </div>
                 </div>
               </div>

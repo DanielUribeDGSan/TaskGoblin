@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 
 interface VisualEffect {
     id: number;
@@ -18,7 +17,6 @@ const PetAgent = ({ isSidebarVisible }: { isSidebarVisible: boolean }) => {
     const [isFocused, setIsFocused] = useState(document.hasFocus());
     const [isNearSidebar, setIsNearSidebar] = useState(false);
     const [hasMouse, setHasMouse] = useState(false);
-    const isIgnoringCursor = useRef(true);
     const requestRef = useRef<number>();
     const lastUpdate = useRef<number>(performance.now());
 
@@ -34,31 +32,14 @@ const PetAgent = ({ isSidebarVisible }: { isSidebarVisible: boolean }) => {
         };
     }, []);
 
-    // Dynamic click-through logic & Mouse Tracking
+    // Mouse Tracking (Interactivity is now handled centrally in App.tsx)
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
             setMousePos({ x: e.clientX, y: e.clientY });
 
-            // Sidebar is typically on the left, up to 440px
-            const inSidebar = e.clientX < 440;
+            // Sidebar is on the RIGHT, typically 440px wide
+            const inSidebar = e.clientX > globalThis.innerWidth - 440;
             setIsNearSidebar(inSidebar);
-
-            // If we have stolen the mouse, we NEVER ignore cursor so we can keep cursor: none
-            if (hasMouse) {
-                if (isIgnoringCursor.current) {
-                    isIgnoringCursor.current = false;
-                    invoke("set_ignore_cursor_events", { ignore: false });
-                }
-                return;
-            }
-
-            if (inSidebar && isIgnoringCursor.current) {
-                isIgnoringCursor.current = false;
-                invoke("set_ignore_cursor_events", { ignore: false });
-            } else if (!inSidebar && !isIgnoringCursor.current) {
-                isIgnoringCursor.current = true;
-                invoke("set_ignore_cursor_events", { ignore: true });
-            }
 
             // Randomly start stalking if mouse is moving
             if (Math.random() < 0.005 && behavior === 'walking') {
@@ -67,14 +48,14 @@ const PetAgent = ({ isSidebarVisible }: { isSidebarVisible: boolean }) => {
         };
         globalThis.addEventListener('mousemove', handleMouseMove);
         return () => globalThis.removeEventListener('mousemove', handleMouseMove);
-    }, [behavior, hasMouse]);
+    }, [behavior]);
 
     // Autonomous Movement & Behavior Logic (Smooth 60fps)
     const animate = (time: number) => {
         const deltaTime = time - lastUpdate.current;
         lastUpdate.current = time;
 
-        const shouldPause = isFocused || isNearSidebar;
+        const shouldPause = isSidebarVisible || isFocused || isNearSidebar;
         if (shouldPause && !hasMouse) {
             requestRef.current = requestAnimationFrame(animate);
             return;
@@ -90,7 +71,6 @@ const PetAgent = ({ isSidebarVisible }: { isSidebarVisible: boolean }) => {
             if (behavior === 'stalking') {
                 currentTarget = mousePos;
             } else if (hasMouse && behavior === 'stealing') {
-                // Run away to a corner!
                 currentTarget = target;
             }
 
@@ -99,7 +79,6 @@ const PetAgent = ({ isSidebarVisible }: { isSidebarVisible: boolean }) => {
             const dist = Math.hypot(dx, dy);
 
             if (dist < 40 && behavior === 'stalking') {
-                // GOTCHA! Steal mouse?
                 const shouldSteal = Math.random() < 0.3;
                 if (shouldSteal) {
                     setBehavior('stealing');
@@ -111,7 +90,6 @@ const PetAgent = ({ isSidebarVisible }: { isSidebarVisible: boolean }) => {
                     setTimeout(() => {
                         setHasMouse(false);
                         setBehavior('walking');
-                        // Restore ignore-cursor logic in next mouse move
                     }, 5000);
                 } else {
                     setBehavior('walking');
@@ -124,9 +102,8 @@ const PetAgent = ({ isSidebarVisible }: { isSidebarVisible: boolean }) => {
             }
 
             if (dist < 15 && behavior !== 'stealing' && behavior !== 'stalking') {
-                // Reached target, decide next move
                 const rand = Math.random();
-                if (rand < 0.05) { // Hairball!
+                if (rand < 0.05) {
                     setBehavior('vomiting');
                     const newHairball: VisualEffect = {
                         id: Date.now(),
@@ -158,9 +135,7 @@ const PetAgent = ({ isSidebarVisible }: { isSidebarVisible: boolean }) => {
                 return prev;
             }
 
-            // Calculate movement
             let speed = (behavior === 'pouncing' || behavior === 'stalking' || behavior === 'stealing') ? 0.3 : 0.1;
-            // Frame-rate independent move
             const moveAmount = speed * deltaTime;
 
             if (dist > 0) {
@@ -180,7 +155,7 @@ const PetAgent = ({ isSidebarVisible }: { isSidebarVisible: boolean }) => {
         return () => {
             if (requestRef.current) cancelAnimationFrame(requestRef.current);
         };
-    }, [target, behavior, isFocused, isNearSidebar, mousePos, hasMouse]);
+    }, [target, behavior, isFocused, isNearSidebar, mousePos, hasMouse, isSidebarVisible]);
 
     const isHidden = (isSidebarVisible || isFocused || isNearSidebar) && !hasMouse;
     if (isHidden) return null;

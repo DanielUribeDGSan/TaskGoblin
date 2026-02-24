@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
-import { invoke } from '@tauri-apps/api/core';
 
 interface Point {
     x: number;
@@ -104,7 +103,7 @@ const PaintPropertiesPanel = memo(function PaintPropertiesPanel({
     );
 });
 
-const PaintBoard = ({ onToggleSidebar, onClose }: { onToggleSidebar: (show: boolean) => void, onClose: () => void }) => {
+const PaintBoard = ({ onClose }: { onClose: () => void }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const canvasPreviewRef = useRef<HTMLCanvasElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);

@@ -6,31 +6,29 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, State, Wry,
 };
-use tokio::sync::Mutex;
+// No longer using tokio::sync::Mutex for simple flags
 
 struct AppState {
-    mouse_moving: Mutex<bool>,
-    is_pet_mode: Mutex<bool>,
-    is_paint_mode: Mutex<bool>,
-    is_dialog_open: Mutex<bool>,
-    shutdown_cancel_tx: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
-    shutdown_target: Mutex<Option<u64>>,
-    shutdown_duration: Mutex<Option<u64>>,
-    last_tray_pos: Mutex<Option<tauri::PhysicalPosition<i32>>>,
+    mouse_moving: std::sync::Mutex<bool>,
+    is_pet_mode: std::sync::Mutex<bool>,
+    is_paint_mode: std::sync::Mutex<bool>,
+    is_dialog_open: std::sync::Mutex<bool>,
+    shutdown_cancel_tx: tokio::sync::Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+    shutdown_target: tokio::sync::Mutex<Option<u64>>,
+    shutdown_duration: tokio::sync::Mutex<Option<u64>>,
+    last_tray_pos: tokio::sync::Mutex<Option<tauri::PhysicalPosition<i32>>>,
 }
 
 #[tauri::command]
 async fn is_mouse_moving(state: State<'_, AppState>) -> Result<bool, String> {
-    let moving = *state.mouse_moving.lock().await;
+    let moving = *state.mouse_moving.lock().map_err(|e| e.to_string())?;
     Ok(moving)
 }
 
 #[tauri::command]
 async fn toggle_mouse(state: State<'_, AppState>) -> Result<bool, String> {
-    let mut moving = state.mouse_moving.lock().await;
+    let mut moving = state.mouse_moving.lock().map_err(|e| e.to_string())?;
     *moving = !*moving;
-    // We update the tray label in the actual tray menu event if toggled there.
-    // Toggling from UI just returns the bool.
     Ok(*moving)
 }
 
@@ -61,15 +59,12 @@ async fn schedule_whatsapp(phone: String, message: String, delay_secs: u64) -> R
         // Wait for WhatsApp to load and focus - increased delay for reliability
         tokio::time::sleep(tokio::time::Duration::from_secs(4)).await;
 
-        // Use AppleScript to focus WhatsApp and press return twice to ensure sending
+        // Use AppleScript to focus WhatsApp and press return
         let script = r#"
+            tell application "WhatsApp" to activate
+            delay 0.5
             tell application "System Events"
-                tell process "WhatsApp"
-                    set frontmost to true
-                    key code 36 -- Return
-                    delay 0.5
-                    key code 36 -- Return again to ensure send if stuck in draft
-                end tell
+                keystroke return
             end tell
         "#;
 
@@ -231,13 +226,45 @@ fn set_ignore_cursor_events(window: tauri::Window, ignore: bool) -> Result<(), S
 }
 
 #[tauri::command]
+async fn repair_permissions() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        let bundle_id = "com.taskgoblin.app";
+
+        // Reset TCC entries
+        let _ = Command::new("tccutil")
+            .arg("reset")
+            .arg("Accessibility")
+            .arg(bundle_id)
+            .output();
+        let _ = Command::new("tccutil")
+            .arg("reset")
+            .arg("ScreenCapture")
+            .arg(bundle_id)
+            .output();
+        let _ = Command::new("tccutil")
+            .arg("reset")
+            .arg("All")
+            .arg(bundle_id)
+            .output();
+
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(())
+    }
+}
+
+#[tauri::command]
 async fn toggle_pet_mode(
     window: tauri::Window,
     active: bool,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     {
-        let mut pet_mode = state.is_pet_mode.lock().await;
+        let mut pet_mode = state.is_pet_mode.lock().map_err(|e| e.to_string())?;
         *pet_mode = active;
     }
 
@@ -289,7 +316,7 @@ async fn toggle_paint_mode(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     {
-        let mut paint_mode = state.is_paint_mode.lock().await;
+        let mut paint_mode = state.is_paint_mode.lock().map_err(|e| e.to_string())?;
         *paint_mode = active;
     }
 
@@ -666,6 +693,16 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
         use std::fs;
         use std::process::Command;
 
+        // 0. Preliminary check: Is 'swift' available?
+        let swift_check = Command::new("which")
+            .arg("swift")
+            .output()
+            .map_err(|e| format!("Failed to check for swift: {}", e))?;
+
+        if !swift_check.status.success() {
+            return Err("El comando 'swift' no está disponible. Por favor, instala Xcode Command Line Tools (ejecuta 'xcode-select --install' en la Terminal).".to_string());
+        }
+
         let was_visible = window.is_visible().unwrap_or(false);
 
         // Ensure the window is fully hidden before taking the screenshot
@@ -696,10 +733,21 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
         }
 
         match capture_res {
-            Ok(_) => {
+            Ok(output) => {
                 // If user pressed Escape to cancel, the file might not exist
                 if !std::path::Path::new(temp_image_path).exists() {
-                    return Ok("".to_string()); // Cancelled capture
+                    // Try to differentiate between Cancel and "No Permission"
+                    // Usually if capture fails due to TCC permissions, it might return a non-zero exit code or stderr message
+                    if !output.status.success() {
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        if stderr.contains("denied") || stderr.contains("permission") {
+                            return Err("Permiso de 'Grabación de Pantalla' denegado. Por favor, habilítalo en Ajustes del Sistema > Privacidad y Seguridad.".to_string());
+                        }
+                        return Err(format!("Error en captura: {}", stderr));
+                    }
+
+                    // If status is success but file doesn't exist, it's likely a cancel (Esc)
+                    return Ok("".to_string());
                 }
 
                 // 2. Swift script to run Vision OCR on the image
@@ -712,7 +760,7 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
                           let tiffData = image.tiffRepresentation,
                           let bitmap = NSBitmapImageRep(data: tiffData),
                           let cgImage = bitmap.cgImage else {
-                        print("ERROR: Failed to load image")
+                        print("ERROR: Failed to load image. If this happens consistently, check Screen Recording permissions.")
                         exit(1)
                     }
 
@@ -746,16 +794,19 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
                 match ocr_res {
                     Ok(out) => {
                         let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                        if stdout.starts_with("ERROR:") {
-                            Err(stdout)
+                        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+
+                        if !out.status.success() || stdout.starts_with("ERROR:") {
+                            let err_msg = if !stdout.is_empty() { stdout } else { stderr };
+                            Err(format!("Error OCR: {}", err_msg))
                         } else {
                             Ok(stdout)
                         }
                     }
-                    Err(e) => Err(format!("OCR extraction failed: {}", e)),
+                    Err(e) => Err(format!("No se pudo ejecutar el script de OCR: {}", e)),
                 }
             }
-            Err(e) => Err(format!("Screencapture failed: {}", e)),
+            Err(e) => Err(format!("Fallo al iniciar screencapture: {}", e)),
         }
     }
     #[cfg(not(target_os = "macos"))]
@@ -771,20 +822,45 @@ async fn write_to_clipboard(text: String) -> Result<(), String> {
         use std::io::Write;
         use std::process::{Command, Stdio};
 
-        let mut child = Command::new("pbcopy")
+        // Using Swift to set the clipboard is more robust for Unicode than pbcopy,
+        // which sometimes misinterprets UTF-8 as MacRoman depending on the environment.
+        let swift_script = r#"
+            import Cocoa
+            import Foundation
+
+            let pasteboard = NSPasteboard.general
+            let data = FileHandle.standardInput.readDataToEndOfFile()
+            if let text = String(data: data, encoding: .utf8) {
+                pasteboard.clearContents()
+                pasteboard.setString(text, forType: .string)
+            } else {
+                exit(1)
+            }
+        "#;
+
+        let mut child = Command::new("swift")
+            .arg("-e")
+            .arg(swift_script)
             .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| format!("Failed to start pbcopy: {}", e))?;
+            .map_err(|e| format!("Failed to start swift for clipboard: {}", e))?;
 
         if let Some(mut stdin) = child.stdin.take() {
             stdin
                 .write_all(text.as_bytes())
-                .map_err(|e| format!("Failed to write to pbcopy stdin: {}", e))?;
+                .map_err(|e| format!("Failed to write to swift stdin: {}", e))?;
         }
 
-        let _ = child
-            .wait()
-            .map_err(|e| format!("Failed to wait for pbcopy: {}", e))?;
+        let output = child
+            .wait_with_output()
+            .map_err(|e| format!("Failed to wait for swift: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Swift clipboard script failed: {}", stderr));
+        }
         Ok(())
     }
     #[cfg(not(target_os = "macos"))]
@@ -897,28 +973,35 @@ async fn convert_pdf_to_word(
     // A python script that accepts arguments: pdf_file, docx_file
     let py_script = r#"
 import sys
+import os
 from pdf2docx import Converter
+
+# Disable ANSI colors in logs
+os.environ['TERM'] = 'dumb'
 
 pdf_file = sys.argv[1]
 docx_file = sys.argv[2]
 try:
     cv = Converter(pdf_file)
     # Advanced settings to improve font and position preservation:
-    # - line_margin: helps with vertical spacing detection
-    # - word_margin: helps with horizontal spacing detection
-    # - multi_processing: speeds up large docs
+    # - multi_processing: Set to False for higher stability on some Mac environments
     cv.convert(
         docx_file, 
         start=0, 
         end=None, 
-        multi_processing=True,
+        multi_processing=False,
         line_margin=0.5,
         word_margin=0.2,
         char_margin=0.05
     )
     cv.close()
+    print("STATUS:SUCCESS")
 except Exception as e:
-    print(f"ERROR: {e}")
+    err_msg = str(e)
+    if "Words count: 0" in err_msg or "not supported" in err_msg.lower():
+        print("STATUS:ERROR_SCANNED_PDF")
+    else:
+        print(f"STATUS:ERROR:{err_msg}")
     sys.exit(1)
 "#;
 
@@ -938,9 +1021,16 @@ except Exception as e:
     .map_err(|e| format!("Failed to execute python converter script: {}", e))?;
 
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        return Err(format!("Python script failed: {} | {}", stdout, stderr));
+
+        if stdout.contains("STATUS:ERROR_SCANNED_PDF") {
+            return Err("Este PDF parece ser una imagen o estar escaneado. No se puede convertir a texto editable directamente.".to_string());
+        } else if let Some(err_idx) = stdout.find("STATUS:ERROR:") {
+            let user_err = &stdout[err_idx + 13..];
+            return Err(format!("Error en la conversión: {}", user_err.trim()));
+        }
+
+        return Err(format!("Hubo un problema técnico al convertir el archivo. Verifica que el PDF no esté protegido."));
     }
 
     emit_progress("Done!", 1.0);
@@ -976,8 +1066,10 @@ async fn process_screenshot_ocr(window: tauri::WebviewWindow) -> Result<(), Stri
 }
 
 #[tauri::command]
-async fn set_dialog_open(state: tauri::State<'_, AppState>, open: bool) -> Result<(), String> {
-    *state.is_dialog_open.lock().await = open;
+async fn set_dialog_open(state: State<'_, AppState>, open: bool) -> Result<(), String> {
+    if let Ok(mut dialog_open) = state.is_dialog_open.lock() {
+        *dialog_open = open;
+    }
     Ok(())
 }
 
@@ -1056,6 +1148,7 @@ pub fn run() {
             get_shutdown_time,
             extract_text_from_screen,
             write_to_clipboard,
+            repair_permissions,
             process_screenshot_ocr,
             convert_pdf_to_word,
             set_dialog_open,
@@ -1063,14 +1156,14 @@ pub fn run() {
         ])
         .setup(|app| {
             app.manage(AppState {
-                mouse_moving: Mutex::new(false),
-                is_pet_mode: Mutex::new(false),
-                is_paint_mode: Mutex::new(false),
-                is_dialog_open: Mutex::new(false),
-                shutdown_cancel_tx: Mutex::new(None),
-                shutdown_target: Mutex::new(None),
-                shutdown_duration: Mutex::new(None),
-                last_tray_pos: Mutex::new(None),
+                mouse_moving: std::sync::Mutex::new(false),
+                is_pet_mode: std::sync::Mutex::new(false),
+                is_paint_mode: std::sync::Mutex::new(false),
+                is_dialog_open: std::sync::Mutex::new(false),
+                shutdown_cancel_tx: tokio::sync::Mutex::new(None),
+                shutdown_target: tokio::sync::Mutex::new(None),
+                shutdown_duration: tokio::sync::Mutex::new(None),
+                last_tray_pos: tokio::sync::Mutex::new(None),
             });
 
             // Start global key listener for Triple-Tap Control
@@ -1122,14 +1215,15 @@ pub fn run() {
                         let app_handle = app.clone();
                         let toggle_item = toggle_item_clone.clone();
                         tauri::async_runtime::spawn(async move {
-                            let state = app_handle.state::<AppState>();
-                            let mut moving = state.mouse_moving.lock().await;
-                            *moving = !*moving;
-
-                            if *moving {
-                                let _ = toggle_item.set_text("Stop Moving Mouse");
-                            } else {
-                                let _ = toggle_item.set_text("Start Moving Mouse");
+                            if let Ok(mut moving) =
+                                app_handle.state::<AppState>().mouse_moving.lock()
+                            {
+                                *moving = !*moving;
+                                if *moving {
+                                    let _ = toggle_item.set_text("Stop Moving Mouse");
+                                } else {
+                                    let _ = toggle_item.set_text("Start Moving Mouse");
+                                }
                             }
                         });
                     }
@@ -1143,36 +1237,52 @@ pub fn run() {
                         ..
                     } => {
                         if let Some(window) = tray.app_handle().get_webview_window("main") {
-                            let is_visible = window.is_visible().unwrap_or(false);
-                            if is_visible {
-                                let _ = window.hide();
-                            } else {
-                                if let Ok(size) = window.outer_size() {
-                                    let app_handle = tray.app_handle().clone();
-                                    let position = position.clone();
-                                    let window_clone = window.clone(); // Clone window to move into async block
+                            let app_handle = tray.app_handle().clone();
+                            let window_clone = window.clone();
+                            let position = position.clone();
 
-                                    tauri::async_runtime::spawn(async move {
-                                        let state = app_handle.state::<AppState>();
-                                        let is_pet = *state.is_pet_mode.lock().await;
-                                        let is_paint = *state.is_paint_mode.lock().await;
+                            tauri::async_runtime::spawn(async move {
+                                let state = app_handle.state::<AppState>();
+                                let (is_pet, is_paint) = {
+                                    let pet = *state
+                                        .is_pet_mode
+                                        .lock()
+                                        .unwrap_or_else(|e| e.into_inner());
+                                    let paint = *state
+                                        .is_paint_mode
+                                        .lock()
+                                        .unwrap_or_else(|e| e.into_inner());
+                                    (pet, paint)
+                                };
+                                // Better check for locks below to avoid unwraps
 
-                                        // ONLY reposition if we are NOT in full-screen modes
-                                        if !is_pet && !is_paint {
+                                if is_pet || is_paint {
+                                    // In special modes, we NEVER hide. We just show/focus which triggers App.tsx listener
+                                    let _ = window_clone.set_ignore_cursor_events(false);
+                                    let _ = window_clone.show();
+                                    let _ = window_clone.set_focus();
+                                    let _ = window_clone.emit("open-sidebar", ());
+                                } else {
+                                    // Normal mode: Toggle visibility
+                                    let is_visible = window_clone.is_visible().unwrap_or(false);
+                                    if is_visible {
+                                        let _ = window_clone.hide();
+                                    } else {
+                                        if let Ok(size) = window_clone.outer_size() {
                                             let x = (position.x as i32) - (size.width as i32 / 2);
                                             let pos = tauri::PhysicalPosition::new(x, 30);
 
-                                            // Save position for future unmaximized restorations
+                                            // Save position
                                             let mut last_pos = state.last_tray_pos.lock().await;
                                             *last_pos = Some(pos);
 
                                             let _ = window_clone.set_position(pos);
                                         }
-                                    });
+                                        let _ = window_clone.show();
+                                        let _ = window_clone.set_focus();
+                                    }
                                 }
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
+                            });
                         }
                     }
                     _ => {}
@@ -1187,13 +1297,16 @@ pub fn run() {
                     tauri::WindowEvent::Focused(focused) => {
                         if !focused {
                             let state = app_handle.state::<AppState>();
-                            let (is_pet_mode, is_paint_mode, is_dialog_open) =
-                                tauri::async_runtime::block_on(async {
-                                    let pm = *state.is_pet_mode.lock().await;
-                                    let ptm = *state.is_paint_mode.lock().await;
-                                    let ido = *state.is_dialog_open.lock().await;
-                                    (pm, ptm, ido)
-                                });
+                            let is_pet_mode =
+                                *state.is_pet_mode.lock().unwrap_or_else(|e| e.into_inner());
+                            let is_paint_mode = *state
+                                .is_paint_mode
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner());
+                            let is_dialog_open = *state
+                                .is_dialog_open
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner());
 
                             if !is_pet_mode && !is_paint_mode && !is_dialog_open {
                                 let _ = window_clone.hide();
@@ -1206,19 +1319,21 @@ pub fn run() {
 
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                let mut enigo = Enigo::new(&Settings::default()).unwrap();
-                let mut direction = 1;
-                loop {
-                    tokio::time::sleep(Duration::from_millis(50)).await;
-                    let state = app_handle.state::<AppState>();
-                    let moving = {
-                        let lock = state.mouse_moving.lock().await;
-                        *lock
-                    };
+                if let Ok(mut enigo) = Enigo::new(&Settings::default()) {
+                    let mut direction = 1;
+                    loop {
+                        tokio::time::sleep(Duration::from_millis(50)).await;
+                        let state = app_handle.state::<AppState>();
+                        let moving = if let Ok(lock) = state.mouse_moving.lock() {
+                            *lock
+                        } else {
+                            false
+                        };
 
-                    if moving {
-                        let _ = enigo.move_mouse(direction, 0, enigo::Coordinate::Rel);
-                        direction = -direction;
+                        if moving {
+                            let _ = enigo.move_mouse(direction, 0, enigo::Coordinate::Rel);
+                            direction = -direction;
+                        }
                     }
                 }
             });
