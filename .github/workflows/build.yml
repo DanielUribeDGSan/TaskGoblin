@@ -51,6 +51,10 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install
 
+      - name: Install nasm (macOS only, required by rav1e/AVIF)
+        if: matrix.platform == 'macos-latest'
+        run: brew install nasm
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0.5.19
         env:
