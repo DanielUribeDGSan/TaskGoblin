@@ -68,9 +68,6 @@ const BackIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
 );
 
-const LangIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-);
 
 interface Contact {
   name: string;
@@ -193,6 +190,7 @@ function App() {
   const [isAutostartEnabled, setIsAutostartEnabled] = useState(false);
   const [pdfConversion, setPdfConversion] = useState<{ active: boolean; step: string; progress: number }>({ active: false, step: "", progress: 0 });
   const [isRepairing, setIsRepairing] = useState(false);
+  const [repairDone, setRepairDone] = useState(false);
   const [appSearchTerm, setAppSearchTerm] = useState("");
   const [closeAppsConfirm, setCloseAppsConfirm] = useState<'all' | 'leisure' | 'heavy' | null>(null);
   const [scheduleShutdownPicker, setScheduleShutdownPicker] = useState(false);
@@ -529,20 +527,11 @@ function App() {
     try {
       setIsRepairing(true);
       await invoke("repair_permissions");
-
-      const { ask } = await import('@tauri-apps/plugin-dialog');
-      const confirmed = await ask(
-        t('repair.toast_success'),
-        { title: t('repair.dialog_title'), kind: "info" }
-      );
-
-      if (confirmed) {
-        await invoke("restart_app");
-      }
-    } catch (err) {
-      showToast("Error repairing permissions: " + String(err));
-    } finally {
       setIsRepairing(false);
+      setRepairDone(true);
+    } catch (err) {
+      setIsRepairing(false);
+      showToast(t('repair.toast_error') + String(err));
     }
   };
 
@@ -1473,14 +1462,86 @@ function App() {
       )}
 
       {isRepairing && (
-        <div className="loading-overlay-full">
-          <div className="loading-card">
-            <div className="loading-spinner"></div>
-            <h3>{t('repair.title')}</h3>
-            <p>{t('repair.desc')}</p>
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.7)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+          color: 'white',
+          padding: '24px'
+        }}>
+          <div style={{
+            backgroundColor: 'var(--bg-secondary)',
+            padding: '24px',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '280px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+            border: '1px solid var(--border-color)',
+            textAlign: 'center'
+          }}>
+            <div className="loading-spinner" style={{ margin: '0 auto 16px auto', width: '32px', height: '32px' }} />
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '16px' }}>{t('repair.title')}</h3>
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>{t('repair.desc')}</p>
           </div>
         </div>
       )}
+
+      {repairDone && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+            color: 'white',
+            padding: '24px',
+            pointerEvents: 'all',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{
+            backgroundColor: 'var(--bg-secondary)',
+            padding: '24px',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '280px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+            border: '1px solid var(--border-color)',
+            textAlign: 'center',
+            pointerEvents: 'all',
+          }}>
+            <div style={{ fontSize: '36px', marginBottom: '12px' }}>✅</div>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '16px' }}>{t('repair.dialog_title')}</h3>
+            <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+              {t('repair.toast_success')}
+            </p>
+            <button
+              onClick={async (e) => { e.stopPropagation(); setRepairDone(false); await invoke("restart_app"); }}
+              style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'var(--accent-color)', color: 'white', cursor: 'pointer', fontSize: '14px', fontWeight: 600, pointerEvents: 'all' }}
+            >
+              {t('common.confirm')}
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
