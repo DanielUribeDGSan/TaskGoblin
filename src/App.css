@@ -15,7 +15,7 @@
 
   /* LIGHT THEME VARIABLES */
   --bg-primary: #ffffff;
-  --bg-gradient: linear-gradient(180deg, #ffffff 60%, rgba(83, 83, 118, 0.477) 100%);
+  --bg-gradient: linear-gradient(180deg, #ffffff 60%, rgb(255, 255, 255) 100%);
   --bg-secondary: #f4f4f7;
   --border-color: #eaeaea;
   --text-primary: #1c1c1e;

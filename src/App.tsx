@@ -913,7 +913,7 @@ function App() {
 
                             <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                                <span style={{ fontSize: '13px', fontWeight: 500 }}>{t('shutdown.label_close_apps')}</span>
+                                <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{t('shutdown.label_close_apps')}</span>
                                 <div
                                   onClick={() => setShouldCloseAppsOnShutdown(!shouldCloseAppsOnShutdown)}
                                   style={{
@@ -1177,7 +1177,7 @@ function App() {
                           exit={{ height: 0, opacity: 0 }}
                           style={{ overflow: 'hidden' }}
                         >
-                          <span className="profile-shutdown-label">Shut down in (minutes):</span>
+                          <span className="profile-shutdown-label" style={{ color: 'var(--text-primary)' }}>{t('shutdown.label_mins')}</span>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
                             <input
                               type="number"
