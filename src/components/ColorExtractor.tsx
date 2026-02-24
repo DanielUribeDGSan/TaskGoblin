@@ -9,7 +9,7 @@ interface ColorData {
     hsl: string;
 }
 
-const ColorExtractor: React.FC = () => {
+const ColorExtractor: React.FC<{ t: (key: string) => string }> = ({ t }) => {
     const [image, setImage] = useState<string | null>(null);
     const [selectedColor, setSelectedColor] = useState<ColorData | null>(null);
     const [hoverColor, setHoverColor] = useState<string>('transparent');
@@ -220,14 +220,14 @@ const ColorExtractor: React.FC = () => {
     return (
         <div className="color-extractor-container" ref={containerRef}>
             <div className="color-extractor-header">
-                <h2 style={{ fontSize: '20px', fontWeight: '600', color: 'var(--text-primary)' }}>Color Extractor</h2>
-                <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Upload an image to pick colors with pixel precision.</p>
+                <h2 style={{ fontSize: '20px', fontWeight: '600', color: 'var(--text-primary)' }}>{t('tabs.color_extractor')}</h2>
+                <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>{t('image.desc')}</p>
             </div>
 
             {!image ? (
                 <div className="upload-placeholder">
                     <button className="upload-btn" onClick={handleImageUpload}>
-                        Choose an Image
+                        {t('common.select')}
                     </button>
                 </div>
             ) : (
@@ -268,7 +268,7 @@ const ColorExtractor: React.FC = () => {
                             <div className="format-item">
                                 <div className="format-label">HEX</div>
                                 <div className="format-value">{selectedColor?.hex || hoverColor}</div>
-                                <button onClick={() => copyToClipboard(selectedColor?.hex || hoverColor)} title="Copy HEX">
+                                <button onClick={() => copyToClipboard(selectedColor?.hex || hoverColor)} title={t('common.save')}>
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                                 </button>
                             </div>
@@ -289,7 +289,7 @@ const ColorExtractor: React.FC = () => {
                         </div>
 
                         <button className="change-img-btn" onClick={handleImageUpload}>
-                            Use another image
+                            {t('common.select')}
                         </button>
                     </div>
                 </div>

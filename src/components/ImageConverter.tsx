@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { invoke } from "@tauri-apps/api/core";
 
-const ImageConverter: React.FC<{ showToast: (msg: string) => void }> = ({ showToast }) => {
+const ImageConverter: React.FC<{ showToast: (msg: string) => void, t: (key: string) => string }> = ({ showToast, t }) => {
     const [inputPath, setInputPath] = useState<string | null>(null);
     const [format, setFormat] = useState('png');
     const [width, setWidth] = useState<string>('');
@@ -64,11 +64,11 @@ const ImageConverter: React.FC<{ showToast: (msg: string) => void }> = ({ showTo
                 optimize: optimize
             });
 
-            showToast("Image converted successfully! ✨");
+            showToast(t('image.toast_success'));
             setIsProcessing(false);
         } catch (err) {
             console.error("Error converting image:", err);
-            showToast("Error converting image: " + err);
+            showToast(t('common.error') + ": " + err);
             setIsProcessing(false);
             await invoke("set_dialog_open", { open: false });
         }
@@ -77,31 +77,31 @@ const ImageConverter: React.FC<{ showToast: (msg: string) => void }> = ({ showTo
     return (
         <div className="wa-form-container">
             <div className="color-extractor-header">
-                <h2 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>Image Converter 🖼️</h2>
-                <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Convert, resize and compress your images.</p>
+                <h2 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>{t('image.title')}</h2>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{t('image.desc')}</p>
             </div>
 
             <div style={{ marginTop: '20px' }}>
                 <div className="wa-input-group">
-                    <label className="wa-input-label" htmlFor="input-origin">Source Image</label>
+                    <label className="wa-input-label" htmlFor="input-origin">{t('image.label_source')}</label>
                     <div style={{ display: 'flex', gap: '8px' }}>
                         <input
                             id="input-origin"
                             type="text"
                             className="wa-input"
-                            placeholder="No image selected"
+                            placeholder={t('image.placeholder_source')}
                             value={inputPath || ''}
                             readOnly
                             style={{ flex: 1, textOverflow: 'ellipsis' }}
                         />
                         <button className="wa-submit-btn" style={{ width: 'auto', padding: '0 16px', margin: 0 }} onClick={handleSelectImage}>
-                            Select
+                            {t('common.select')}
                         </button>
                     </div>
                 </div>
 
                 <div className="wa-input-group" style={{ marginTop: '16px' }}>
-                    <label className="wa-input-label" htmlFor="output-format">Output Format</label>
+                    <label className="wa-input-label" htmlFor="output-format">{t('image.label_format')}</label>
                     <select
                         id="output-format"
                         className="wa-input"
@@ -122,7 +122,7 @@ const ImageConverter: React.FC<{ showToast: (msg: string) => void }> = ({ showTo
 
                 <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
                     <div className="wa-input-group" style={{ flex: 1 }}>
-                        <label className="wa-input-label" htmlFor="input-width">Width (optional)</label>
+                        <label className="wa-input-label" htmlFor="input-width">{t('image.label_width')}</label>
                         <input
                             id="input-width"
                             type="number"
@@ -133,7 +133,7 @@ const ImageConverter: React.FC<{ showToast: (msg: string) => void }> = ({ showTo
                         />
                     </div>
                     <div className="wa-input-group" style={{ flex: 1 }}>
-                        <label className="wa-input-label" htmlFor="input-height">Height (optional)</label>
+                        <label className="wa-input-label" htmlFor="input-height">{t('image.label_height')}</label>
                         <input
                             id="input-height"
                             type="number"
@@ -148,7 +148,7 @@ const ImageConverter: React.FC<{ showToast: (msg: string) => void }> = ({ showTo
                 {(format === 'jpg' || format === 'jpeg' || format === 'webp') && (
                     <div className="wa-input-group" style={{ marginTop: '16px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <label className="wa-input-label" htmlFor="quality-range">Compression Quality</label>
+                            <label className="wa-input-label" htmlFor="quality-range">{t('image.label_quality')}</label>
                             <span style={{ fontSize: '12px', color: 'var(--accent-color)', opacity: optimize ? 0.5 : 1 }}>{quality}%</span>
                         </div>
                         <input
@@ -166,8 +166,8 @@ const ImageConverter: React.FC<{ showToast: (msg: string) => void }> = ({ showTo
 
                 <div className="list-item" style={{ marginTop: '20px', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer' }} onClick={() => setOptimize(!optimize)}>
                     <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-                        <span style={{ fontSize: '14px', fontWeight: '600' }}>Smart Optimization</span>
-                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Automatically reduce size without visual loss.</span>
+                        <span style={{ fontSize: '14px', fontWeight: '600' }}>{t('image.smart_opt')}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{t('image.smart_opt_desc')}</span>
                     </div>
                     <div className={`toggle-switch ${optimize ? "active" : ""}`}>
                         <div className="toggle-knob"></div>
@@ -180,7 +180,7 @@ const ImageConverter: React.FC<{ showToast: (msg: string) => void }> = ({ showTo
                     onClick={handleConvert}
                     disabled={!inputPath || isProcessing}
                 >
-                    {isProcessing ? "Processing..." : "Convert and Save"}
+                    {isProcessing ? t('common.processing') : t('image.btn_convert')}
                 </button>
                 {isProcessing && (
                     <div style={{
@@ -209,9 +209,9 @@ const ImageConverter: React.FC<{ showToast: (msg: string) => void }> = ({ showTo
                             textAlign: 'center'
                         }}>
                             <div className="loading-spinner"></div>
-                            <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>Converting Image...</h3>
+                            <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>{t('image.loading_title')}</h3>
                             <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
-                                This might take a moment depending on the size and format.
+                                {t('image.loading_desc')}
                             </p>
                         </div>
                     </div>

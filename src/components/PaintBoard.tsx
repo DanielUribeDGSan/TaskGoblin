@@ -36,6 +36,8 @@ const PaintPropertiesPanel = memo(function PaintPropertiesPanel({
     tool,
     onClearAll,
     onReverseOrder,
+    onHide,
+    t,
 }: {
     color: string;
     setColor: (c: string) => void;
@@ -46,12 +48,15 @@ const PaintPropertiesPanel = memo(function PaintPropertiesPanel({
     tool: ToolType;
     onClearAll: () => void;
     onReverseOrder: () => void;
+    onHide: () => void;
+    t: (key: string) => string;
 }) {
     return (
         <div className="paint-properties-anchor">
             <div className="paint-properties">
+                <button type="button" className="close-panel-btn" onClick={onHide} title={t('paint.hide_panel')}>✕</button>
                 <div className="prop-section">
-                    <label htmlFor="color-picker">Trazo</label>
+                    <label htmlFor="color-picker">{t('paint.trazo')}</label>
                     <div id="color-picker" className="color-grid">
                         {['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ffffff', '#000000'].map(c => (
                             <div
@@ -68,7 +73,7 @@ const PaintPropertiesPanel = memo(function PaintPropertiesPanel({
                 </div>
                 {tool === 'text' && (
                     <div className="prop-section">
-                        <label htmlFor="size-btns">Tamaño de Fuente</label>
+                        <label htmlFor="size-btns">{t('paint.font_size')}</label>
                         <div id="size-btns" className="size-btns">
                             {[16, 24, 32, 48].map(size => (
                                 <button
@@ -84,26 +89,20 @@ const PaintPropertiesPanel = memo(function PaintPropertiesPanel({
                     </div>
                 )}
                 <div className="prop-section">
-                    <label htmlFor="thickness-range">Grosor / Tamaño: {thickness}</label>
+                    <label htmlFor="thickness-range">{t('paint.thickness')}: {thickness}</label>
                     <input id="thickness-range" type="range" min="1" max="50" value={thickness} onChange={(e) => setThickness(Number(e.target.value))} />
                 </div>
                 <div className="prop-section">
-                    <label htmlFor="opacity-range">Opacidad: {Math.round(opacity * 100)}%</label>
+                    <label htmlFor="opacity-range">{t('paint.opacity')}: {Math.round(opacity * 100)}%</label>
                     <input id="opacity-range" type="range" min="0.1" max="1" step="0.1" value={opacity} onChange={(e) => setOpacity(Number(e.target.value))} />
                 </div>
-                <div className="prop-section actions">
-                    <label>Capas / Acciones</label>
-                    <div className="action-btns">
-                        <button type="button" onClick={onReverseOrder} title="Invertir Orden">🔄</button>
-                        <button type="button" className="danger" onClick={onClearAll} title="Borrar Todo">🗑️</button>
-                    </div>
-                </div>
+
             </div>
         </div>
     );
 });
 
-const PaintBoard = ({ onClose }: { onClose: () => void }) => {
+const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => string }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const canvasPreviewRef = useRef<HTMLCanvasElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -122,6 +121,7 @@ const PaintBoard = ({ onClose }: { onClose: () => void }) => {
     const [activeTextId, setActiveTextId] = useState<string | null>(null);
     const [startPos, setStartPos] = useState<Point | null>(null);
     const [resizeHandle, setResizeHandle] = useState<ResizeHandle>(null);
+    const [isPanelVisible, setIsPanelVisible] = useState(true);
 
     const getResizeHandle = (x: number, y: number, el: PaintElement): ResizeHandle => {
         if (el.type !== 'rect' && el.type !== 'circle' && el.type !== 'text') return null;
@@ -259,20 +259,21 @@ const PaintBoard = ({ onClose }: { onClose: () => void }) => {
         setStartPos({ x, y });
 
         if (tool === 'text') {
-            const newTextId = Date.now().toString();
-            const newText: PaintElement = {
-                id: newTextId,
-                type: 'text',
-                x,
-                y,
-                text: '',
-                color,
-                thickness: 0,
-                opacity,
-                fontSize: thickness * 5, // Font size related to thickness
-            };
-            setElements(prev => [...prev, newText]);
-            setActiveTextId(newTextId);
+            const text = window.prompt(t('paint.placeholder_text'));
+            if (text) {
+                const newText: PaintElement = {
+                    id: Date.now().toString(),
+                    type: 'text',
+                    x,
+                    y,
+                    text: text,
+                    color,
+                    thickness: 0,
+                    opacity,
+                    fontSize: thickness * 5,
+                };
+                setElements(prev => [...prev, newText]);
+            }
             return;
         }
 
@@ -401,14 +402,6 @@ const PaintBoard = ({ onClose }: { onClose: () => void }) => {
         setPreviewElement(null);
         setStartPos(null);
         setResizeHandle(null);
-    };
-
-    const handleTextChange = (id: string, text: string) => {
-        setElements(prev => prev.map(el => el.id === id ? { ...el, text } : el));
-    };
-
-    const closeTextEdit = () => {
-        setActiveTextId(null);
     };
 
     const clearAll = useCallback(() => {
@@ -600,21 +593,31 @@ const PaintBoard = ({ onClose }: { onClose: () => void }) => {
                 {/* Dynamic Island Toolbar */}
                 <div className="paint-toolbar-wrapper">
                     <div className="paint-toolbar">
-                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'pencil' ? 'active' : ''}`} onClick={() => setTool('pencil')} onKeyDown={(e) => e.key === 'Enter' && setTool('pencil')} title="Lápiz">✏️</div>
-                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'pen' ? 'active' : ''}`} onClick={() => setTool('pen')} onKeyDown={(e) => e.key === 'Enter' && setTool('pen')} title="Lapicero">✒️</div>
-                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'marker' ? 'active' : ''}`} onClick={() => setTool('marker')} onKeyDown={(e) => e.key === 'Enter' && setTool('marker')} title="Plumón">🖊️</div>
-                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'brush' ? 'active' : ''}`} onClick={() => setTool('brush')} onKeyDown={(e) => e.key === 'Enter' && setTool('brush')} title="Brocha">🖌️</div>
-                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'eraser' ? 'active' : ''}`} onClick={() => setTool('eraser')} onKeyDown={(e) => e.key === 'Enter' && setTool('eraser')} title="Borrador">🧽</div>
+                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'pencil' ? 'active' : ''}`} onClick={() => setTool('pencil')} onKeyDown={(e) => e.key === 'Enter' && setTool('pencil')} title={t('paint.pencil')}>✏️</div>
+                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'pen' ? 'active' : ''}`} onClick={() => setTool('pen')} onKeyDown={(e) => e.key === 'Enter' && setTool('pen')} title={t('paint.pen')}>✒️</div>
+                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'marker' ? 'active' : ''}`} onClick={() => setTool('marker')} onKeyDown={(e) => e.key === 'Enter' && setTool('marker')} title={t('paint.marker')}>🖊️</div>
+                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'brush' ? 'active' : ''}`} onClick={() => setTool('brush')} onKeyDown={(e) => e.key === 'Enter' && setTool('brush')} title={t('paint.brush')}>🖌️</div>
+                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'eraser' ? 'active' : ''}`} onClick={() => setTool('eraser')} onKeyDown={(e) => e.key === 'Enter' && setTool('eraser')} title={t('paint.eraser')}>🧽</div>
                         <div className="toolbar-divider"></div>
-                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'text' ? 'active' : ''}`} onClick={() => setTool('text')} onKeyDown={(e) => e.key === 'Enter' && setTool('text')} title="Texto">A</div>
-                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'rect' ? 'active' : ''}`} onClick={() => setTool('rect')} onKeyDown={(e) => e.key === 'Enter' && setTool('rect')} title="Rectángulo">□</div>
-                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'circle' ? 'active' : ''}`} onClick={() => setTool('circle')} onKeyDown={(e) => e.key === 'Enter' && setTool('circle')} title="Círculo">○</div>
-                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'move' ? 'active' : ''}`} onClick={() => setTool('move')} onKeyDown={(e) => e.key === 'Enter' && setTool('move')} title="Mover">🖐️</div>
+                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'text' ? 'active' : ''}`} onClick={() => setTool('text')} onKeyDown={(e) => e.key === 'Enter' && setTool('text')} title={t('paint.text')}>A</div>
+                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'rect' ? 'active' : ''}`} onClick={() => setTool('rect')} onKeyDown={(e) => e.key === 'Enter' && setTool('rect')} title={t('paint.rect')}>□</div>
+                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'circle' ? 'active' : ''}`} onClick={() => setTool('circle')} onKeyDown={(e) => e.key === 'Enter' && setTool('circle')} title={t('paint.circle')}>○</div>
+                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'move' ? 'active' : ''}`} onClick={() => setTool('move')} onKeyDown={(e) => e.key === 'Enter' && setTool('move')} title={t('paint.move')}>🖐️</div>
                         <div className="toolbar-divider"></div>
-                        <div role="button" tabIndex={0} className="tool-btn danger" onClick={clearAll} onKeyDown={(e) => e.key === 'Enter' && clearAll()} title="Borrar Todo">🗑️</div>
-                        <div role="button" tabIndex={0} className="tool-btn" onClick={closePaint} onKeyDown={(e) => e.key === 'Enter' && closePaint()} title="Cerrar">✕</div>
+                        <div role="button" tabIndex={0} className="tool-btn danger" onClick={clearAll} onKeyDown={(e) => e.key === 'Enter' && clearAll()} title={t('paint.clear_all')}>🗑️</div>
+                        <div role="button" tabIndex={0} className="tool-btn" onClick={closePaint} onKeyDown={(e) => e.key === 'Enter' && closePaint()} title={t('paint.close')}>✕</div>
                     </div>
                 </div>
+
+                {!isPanelVisible && (
+                    <button
+                        className="show-panel-btn"
+                        onClick={() => setIsPanelVisible(true)}
+                        title={t('paint.show_panel')}
+                    >
+                        🎨
+                    </button>
+                )}
 
                 {/* Panel rendered in separate portal below so its DOM is never touched when canvas clears */}
                 <canvas ref={canvasRef} className="paint-canvas main-canvas" />
@@ -629,28 +632,11 @@ const PaintBoard = ({ onClose }: { onClose: () => void }) => {
                 />
             </div>
 
-            {/* Text input outside paint-container so removing it on clear doesn't reflow the island */}
-            {activeTextId && elements.find(el => el.id === activeTextId) && (
-                <textarea
-                    ref={textareaRef}
-                    className="canvas-text-input"
-                    placeholder="Escribe aquí..."
-                    value={elements.find(el => el.id === activeTextId)?.text || ''}
-                    onChange={(e) => handleTextChange(activeTextId, e.target.value)}
-                    onBlur={closeTextEdit}
-                    style={{
-                        position: 'fixed',
-                        left: (elements.find(el => el.id === activeTextId)?.x || 0) + 'px',
-                        top: (elements.find(el => el.id === activeTextId)?.y || 0) + 'px',
-                        color: elements.find(el => el.id === activeTextId)?.color,
-                        fontSize: (elements.find(el => el.id === activeTextId)?.fontSize || 20) + 'px',
-                    }}
-                />
-            )}
+            {/* Text input portal removed in favor of window.prompt */}
         </div>
     );
 
-    const panelPortal = createPortal(
+    const panelPortal = isPanelVisible ? createPortal(
         <PaintPropertiesPanel
             color={color}
             setColor={setColor}
@@ -661,9 +647,11 @@ const PaintBoard = ({ onClose }: { onClose: () => void }) => {
             tool={tool}
             onClearAll={clearAll}
             onReverseOrder={reverseOrder}
+            onHide={() => setIsPanelVisible(false)}
+            t={t}
         />,
         document.body
-    );
+    ) : null;
 
     return (
         <>

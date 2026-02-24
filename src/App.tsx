@@ -11,6 +11,7 @@ import PetAgent from './components/PetAgent';
 import ColorExtractor from './components/ColorExtractor';
 import PaintBoard from './components/PaintBoard';
 import ImageConverter from './components/ImageConverter';
+import { translations, Language } from "./i18n/translations";
 import "./App.css";
 
 // SVG Icons can be added here if needed, but we'll use emojis/images for simplicity as per mockup
@@ -64,6 +65,10 @@ const ImageIcon = () => (
 
 const BackIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+);
+
+const LangIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
 );
 
 interface Contact {
@@ -162,6 +167,19 @@ function App() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
   const [contactError, setContactError] = useState<string | null>(null);
+  const [language, setLanguage] = useState<Language>(() => {
+    return (localStorage.getItem('app-language') as Language) || 'es';
+  });
+
+  const t = (path: string): string => {
+    const keys = path.split('.');
+    let current: any = translations[language];
+    for (const key of keys) {
+      if (current[key] === undefined) return path;
+      current = current[key];
+    }
+    return current;
+  };
 
   // WhatsApp scheduling state
   const [waPhone, setWaPhone] = useState("");
@@ -222,6 +240,11 @@ function App() {
       document.body.classList.remove('dark');
     }
   }, [isDarkMode]);
+
+  // Persist language
+  useEffect(() => {
+    localStorage.setItem('app-language', language);
+  }, [language]);
 
   useEffect(() => {
     // Check initial mouse state from rust
@@ -471,10 +494,10 @@ function App() {
       await invoke("set_dialog_open", { open: false });
 
       if (selected && typeof selected === 'string') {
-        setPdfConversion({ active: true, step: "Initializing...", progress: 0.1 });
+        setPdfConversion({ active: true, step: t('pdf.step_init'), progress: 0.1 });
         await invoke("convert_pdf_to_word", { pdfPath: selected });
         // The "Done" toast will be handled by the listener or after success
-        showToast("PDF converted successfully! Saved to Downloads. 📄✨");
+        showToast(t('pdf.toast_success'));
       }
     } catch (err) {
       console.error(err);
@@ -491,8 +514,8 @@ function App() {
 
       const { ask } = await import('@tauri-apps/plugin-dialog');
       const confirmed = await ask(
-        "Permissions reset successfully! A complete restart is required to apply the changes. Should we restart now?",
-        { title: "Repair Complete", kind: "info" }
+        t('repair.toast_success'),
+        { title: t('repair.dialog_title'), kind: "info" }
       );
 
       if (confirmed) {
@@ -531,20 +554,20 @@ function App() {
   const handleScheduleWa = async () => {
     try {
       if (!waPhone || !waMsg || !waDateTime) {
-        showToast("Please fill in all fields.");
+        showToast(t('whatsapp.toast_fill_fields'));
         return;
       }
 
       const finalPhone = sanitizePhone(waPhone, countryCode);
       if (!finalPhone.startsWith("+")) {
-        showToast("Please ensure the number has a country code (e.g., +52)");
+        showToast(t('whatsapp.toast_ensure_country'));
         return;
       }
 
       const now = new Date();
       const delayMs = waDateTime.getTime() - now.getTime();
       if (delayMs < 0) {
-        showToast("The selected date and time has already passed. Please choose a future time.");
+        showToast(t('whatsapp.toast_past_date'));
         return;
       }
 
@@ -555,18 +578,18 @@ function App() {
         message: waMsg,
         delaySecs: delaySecs
       }).then(() => {
-        showToast(`Message scheduled for ${waDateTime.toLocaleString()} 🚀`);
+        showToast(t('whatsapp.toast_scheduled').replace('{0}', waDateTime.toLocaleString()));
         setWaPhone("");
         setWaMsg("");
         setWaDateTime(new Date());
         setActiveTab("Main");
       }).catch(err => {
         console.error(err);
-        showToast("Error scheduling: " + err);
+        showToast(t('common.error') + ": " + err);
       });
     } catch (err) {
       console.error(err);
-      showToast("Error scheduling message: " + err);
+      showToast(t('common.error') + ": " + err);
     }
   };
 
@@ -575,6 +598,7 @@ function App() {
       {isPaintActive && (
         <PaintBoard
           onClose={() => togglePaintMode(false)}
+          t={t}
         />
       )}
       <div
@@ -601,16 +625,16 @@ function App() {
             <div className="confirm-overlay" onClick={() => setCloseAppsConfirm(null)}>
               <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
                 <p className="confirm-message">
-                  {closeAppsConfirm === "all" && "Are you sure you want to close all open apps?"}
-                  {closeAppsConfirm === "leisure" && "Are you sure you want to close leisure apps (Spotify, Netflix, Discord, etc.)?"}
-                  {closeAppsConfirm === "heavy" && "Are you sure you want to close heavy apps (Chrome, Docker, IDEs, etc.)?"}
+                  {closeAppsConfirm === "all" && t('shutdown.confirm_all')}
+                  {closeAppsConfirm === "leisure" && t('shutdown.confirm_leisure')}
+                  {closeAppsConfirm === "heavy" && t('shutdown.confirm_heavy')}
                 </p>
                 <div className="confirm-actions">
                   <button type="button" className="confirm-btn confirm-btn-cancel" onClick={() => setCloseAppsConfirm(null)}>
-                    Cancel
+                    {t('common.cancel')}
                   </button>
                   <button type="button" className="confirm-btn confirm-btn-yes" onClick={handleCloseApps}>
-                    Yes
+                    {t('common.yes')}
                   </button>
                 </div>
               </div>
@@ -621,14 +645,22 @@ function App() {
             <div
               className="logo-section"
               onClick={() => setActiveTab("Main")}
-              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}
               data-tauri-drag-region
             >
               <img src="/icon/TaskGoblin.png" alt="TaskGoblin" className="app-logo" data-tauri-drag-region />
-              <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }} data-tauri-drag-region>TaskGoblin</h1>
-              <span style={{ fontSize: '10px', color: 'var(--text-secondary)', marginBottom: '-9px', marginLeft: '-4px' }} data-tauri-drag-region>by Daniel Uribe</span>
+              <div style={{ display: 'flex', flexDirection: 'column' }} data-tauri-drag-region>
+                <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }} data-tauri-drag-region>TaskGoblin</h1>
+                <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }} data-tauri-drag-region>{t('sidebar.by_daniel')}</span>
+              </div>
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
+              <button className="theme-toggle-btn" onClick={() => setLanguage(language === 'en' ? 'es' : 'en')} title={language === 'en' ? 'Cambiar a Español' : 'Switch to English'}>
+                <span style={{ fontSize: '10px', fontWeight: 'bold' }}>{language.toUpperCase()}</span>
+              </button>
+              <button className="theme-toggle-btn" onClick={() => setIsDarkMode(!isDarkMode)}>
+                {isDarkMode ? <LightModeIcon /> : <DarkModeIcon />}
+              </button>
               <button
                 className="theme-toggle-btn"
                 onClick={() => {
@@ -639,14 +671,11 @@ function App() {
                     } catch (e) {
                       console.error("Failed to hide window", e);
                     }
-                  }, 600); // Wait for the new 0.6s CSS animation to play
+                  }, 600);
                 }}
                 title="Close Sidebar"
               >
                 <span style={{ fontSize: '18px' }}>×</span>
-              </button>
-              <button className="theme-toggle-btn" onClick={() => setIsDarkMode(!isDarkMode)}>
-                {isDarkMode ? <LightModeIcon /> : <DarkModeIcon />}
               </button>
             </div>
           </div>
@@ -655,7 +684,7 @@ function App() {
             <div style={{ padding: '0 16px', marginTop: '4px', marginBottom: '16px' }} data-tauri-drag-region>
               <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '10px 14px', gap: '8px' }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                <input type="text" placeholder="Search" style={{ border: 'none', background: 'transparent', padding: 0, margin: 0, outline: 'none', width: '100%', fontSize: '14px', color: 'var(--text-primary)', boxShadow: 'none' }} value={appSearchTerm} onChange={(e) => setAppSearchTerm(e.target.value)} className="no-focus-input" />
+                <input type="text" placeholder={t('common.search')} style={{ border: 'none', background: 'transparent', padding: 0, margin: 0, outline: 'none', width: '100%', fontSize: '14px', color: 'var(--text-primary)', boxShadow: 'none' }} value={appSearchTerm} onChange={(e) => setAppSearchTerm(e.target.value)} className="no-focus-input" />
               </div>
             </div>
           )}
@@ -664,11 +693,11 @@ function App() {
             {activeTab === "Pet" && (
               <div className="wa-form-container">
                 <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
-                  <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Volver
+                  <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> {t('common.back')}
                 </div>
-                <h2 style={{ fontSize: '18px', marginBottom: '8px' }}>Puppy Mode 🐶</h2>
+                <h2 style={{ fontSize: '18px', marginBottom: '8px' }}>{t('pet.title')}</h2>
                 <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
-                  Activate a gluttonous puppy that travels the screen eating fragments.
+                  {t('pet.desc')}
                 </p>
 
                 <button
@@ -676,19 +705,19 @@ function App() {
                   onClick={togglePetMode}
                   style={{ padding: '12px', background: isPetMode ? '#8c7ae6' : 'rgba(255,255,255,0.05)' }}
                 >
-                  {isPetMode ? "🛑 Deactivate Puppy" : "🚀 Activate Puppy"}
+                  {isPetMode ? t('pet.btn_deactivate') : t('pet.btn_activate')}
                 </button>
               </div>
             )}
 
             {activeTab === "Main" && (
               <div data-tauri-drag-region style={{ flex: 1 }}>
-                {"main".includes(appSearchTerm.toLowerCase()) && <div className="section-label" data-tauri-drag-region>MAIN</div>}
+                {"main".includes(appSearchTerm.toLowerCase()) && <div className="section-label" data-tauri-drag-region>{t('sidebar.main')}</div>}
 
                 {"move mouse".includes(appSearchTerm.toLowerCase()) && (
                   <div className={`list-item ${isMouseMoving ? "active" : ""}`} onClick={handleToggleMouse}>
                     <div className="icon"><MouseIcon /></div>
-                    <span>Move Mouse</span>
+                    <span>{t('tabs.move_mouse')}</span>
                     <div className={`toggle-switch ${isMouseMoving ? "active" : ""}`}>
                       <div className="toggle-knob"></div>
                     </div>
@@ -708,7 +737,7 @@ function App() {
                 {"whatsapp msg".includes(appSearchTerm.toLowerCase()) && (
                   <div className="list-item" onClick={() => { setActiveTab("WhatsApp"); setAppSearchTerm(""); }}>
                     <div className="icon"><MsgIcon /></div>
-                    <span>WhatsApp Msg</span>
+                    <span>{t('tabs.whatsapp')}</span>
                   </div>
                 )}
 
@@ -717,7 +746,7 @@ function App() {
                     <div className="icon">
                       <div className="icon"><ScreenshotIcon /></div>
                     </div>
-                    <span>Screenshot to Text</span>
+                    <span>{t('tabs.screenshot')}</span>
                   </div>
                 )}
 
@@ -726,7 +755,7 @@ function App() {
                     <div className="icon">
                       <div className="icon"><CloseIcon /></div>
                     </div>
-                    <span>Close All Apps</span>
+                    <span>{t('tabs.close_apps')}</span>
                   </div>
                 )}
 
@@ -736,13 +765,13 @@ function App() {
                       <div className="icon">
                         <div className="icon"><ShutdownIcon /></div>
                       </div>
-                      <span>Schedule Shutdown</span>
+                      <span>{t('tabs.shutdown')}</span>
                     </div>
 
                     {showMainShutdownPicker && (
                       <div className="profile-shutdown-picker" style={{ padding: '0 16px 12px 16px', marginTop: 0, borderTop: 'none' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                          <span className="profile-shutdown-label" style={{ margin: 0 }}>Shut down in (minutes):</span>
+                          <span className="profile-shutdown-label" style={{ margin: 0 }}>{t('shutdown.label_mins')}</span>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -759,7 +788,7 @@ function App() {
                           <input
                             type="number"
                             min="1"
-                            placeholder="e.g. 15"
+                            placeholder={t('shutdown.placeholder_mins')}
                             value={scheduleShutdownConfirm}
                             onChange={(e) => setScheduleShutdownConfirm(e.target.value)}
                             style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
@@ -774,7 +803,7 @@ function App() {
                               }
                             }}
                           >
-                            Schedule
+                            {t('shutdown.btn_schedule')}
                           </button>
                         </div>
                       </div>
@@ -789,7 +818,7 @@ function App() {
                         <PdfIcon />
                       </div>
                     </div>
-                    <span>Convert PDF to Word</span>
+                    <span>{t('tabs.pdf_to_word')}</span>
                   </div>
                 )}
 
@@ -800,7 +829,7 @@ function App() {
                         <ColorIcon />
                       </div>
                     </div>
-                    <span>Color Extractor</span>
+                    <span>{t('tabs.color_extractor')}</span>
                   </div>
                 )}
 
@@ -811,7 +840,7 @@ function App() {
                         <PaintIcon />
                       </div>
                     </div>
-                    <span>Paint</span>
+                    <span>{t('tabs.paint')}</span>
                   </div>
                 )}
 
@@ -822,18 +851,18 @@ function App() {
                         <ImageIcon />
                       </div>
                     </div>
-                    <span>Image Converter</span>
+                    <span>{t('tabs.image_converter')}</span>
                   </div>
                 )}
 
                 {(!appSearchTerm || "profiles".includes(appSearchTerm.toLowerCase()) || "modes".includes(appSearchTerm.toLowerCase())) && (
                   <>
-                    <div className="section-label" style={{ marginTop: '20px' }} data-tauri-drag-region>PROFILES</div>
+                    <div className="section-label" style={{ marginTop: '20px' }} data-tauri-drag-region>{t('sidebar.profiles')}</div>
                     <div className="list-item" onClick={() => { setActiveTab("Profiles"); setAppSearchTerm(""); }}>
                       <div className="icon">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                       </div>
-                      <span>Profiles</span>
+                      <span>{t('tabs.profiles')}</span>
                     </div>
                   </>
                 )}
@@ -846,7 +875,7 @@ function App() {
                     <div className="icon">
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
                     </div>
-                    <span>Notifications</span>
+                    <span>{t('tabs.notifications')}</span>
                   </div>
                 )}
 
@@ -855,7 +884,7 @@ function App() {
                     <div className="icon">
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                     </div>
-                    <span>Settings</span>
+                    <span>{t('tabs.settings')}</span>
                   </div>
                 )}
               </div>
@@ -867,20 +896,20 @@ function App() {
                   <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Back
                 </div>
                 <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
-                  Quick modes to close apps and manage notifications.
+                  {t('profiles_view.desc')}
                 </p>
 
                 <div className="profile-mode-card">
                   <div className="profile-mode-header">
                     <span className="profile-mode-icon">💼</span>
-                    <span className="profile-mode-title">Work Mode</span>
+                    <span className="profile-mode-title">{t('profiles_view.work_title')}</span>
                   </div>
                   <div className="profile-mode-actions">
                     <button type="button" className="profile-action-btn" onClick={() => setCloseAppsConfirm("leisure")}>
-                      Close leisure apps
+                      {t('profiles_view.close_leisure')}
                     </button>
                     <button type="button" className="profile-action-btn" onClick={handleOpenFocusSettings}>
-                      Mute notifications
+                      {t('profiles_view.mute_notifications')}
                     </button>
                   </div>
                 </div>
@@ -888,14 +917,14 @@ function App() {
                 <div className="profile-mode-card">
                   <div className="profile-mode-header">
                     <span className="profile-mode-icon">🎮</span>
-                    <span className="profile-mode-title">Gaming Mode</span>
+                    <span className="profile-mode-title">{t('profiles_view.gaming_title')}</span>
                   </div>
                   <div className="profile-mode-actions">
                     <button type="button" className="profile-action-btn" onClick={() => setCloseAppsConfirm("heavy")}>
-                      Close heavy apps
+                      {t('profiles_view.close_heavy')}
                     </button>
                     <button type="button" className="profile-action-btn" onClick={handleOpenFocusSettings}>
-                      Disable notifications
+                      {t('profiles_view.disable_notifications')}
                     </button>
                   </div>
                 </div>
@@ -903,14 +932,14 @@ function App() {
                 <div className="profile-mode-card">
                   <div className="profile-mode-header">
                     <span className="profile-mode-icon">🌙</span>
-                    <span className="profile-mode-title">Sleep Mode</span>
+                    <span className="profile-mode-title">{t('profiles_view.sleep_title')}</span>
                   </div>
                   <div className="profile-mode-actions">
                     <button type="button" className="profile-action-btn" onClick={() => setCloseAppsConfirm("all")}>
-                      Close everything
+                      {t('profiles_view.close_everything')}
                     </button>
                     <button type="button" className="profile-action-btn" onClick={() => setScheduleShutdownPicker(!scheduleShutdownPicker)}>
-                      Schedule shutdown
+                      {t('profiles_view.schedule_shutdown')}
                     </button>
                   </div>
                   {scheduleShutdownPicker && (
@@ -940,7 +969,7 @@ function App() {
                       </div>
 
                       <button type="button" className="profile-action-btn profile-shutdown-cancel" onClick={() => { setScheduleShutdownPicker(false); setScheduleShutdownConfirm(""); }}>
-                        Cancel
+                        {t('common.cancel')}
                       </button>
                     </div>
                   )}
@@ -951,9 +980,9 @@ function App() {
             {activeTab === "ColorPicker" && (
               <div className="wa-form-container">
                 <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
-                  <BackIcon /> <span style={{ marginLeft: '8px' }}>Back</span>
+                  <BackIcon /> <span style={{ marginLeft: '8px' }}>{t('common.back')}</span>
                 </div>
-                <ColorExtractor />
+                <ColorExtractor t={t} />
               </div>
             )}
 
@@ -963,27 +992,27 @@ function App() {
                   <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Back
                 </div>
                 <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
-                  App configuration and behavior.
+                  {t('settings_view.desc')}
                 </p>
 
                 <div className={`list-item ${isAutostartEnabled ? "active" : ""}`} onClick={handleToggleAutostart}>
                   <div className="icon">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
                   </div>
-                  <span>Start on Login</span>
+                  <span>{t('autostart.title')}</span>
                   <div className={`toggle-switch ${isAutostartEnabled ? "active" : ""}`}>
                     <div className="toggle-knob"></div>
                   </div>
                 </div>
 
-                <div className="section-label" style={{ marginTop: '20px' }}>SUPPORT</div>
+                <div className="section-label" style={{ marginTop: '20px' }}>{t('support.title')}</div>
                 <div className="list-item" onClick={handleRepairPermissions}>
                   <div className="icon">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span>Repair Permissions (Update Fix)</span>
-                    <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>Use this if permissions fail after updating</span>
+                    <span>{t('support.repair_title')}</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{t('support.repair_desc')}</span>
                   </div>
                 </div>
               </div>
@@ -992,7 +1021,7 @@ function App() {
             {activeTab === "WhatsApp" && (
               <div className="wa-form-container">
                 <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
-                  <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Back
+                  <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> {t('common.back')}
                 </div>
 
                 <ContactPicker
@@ -1018,11 +1047,11 @@ function App() {
                 />
                 {isLoadingContacts && (
                   <div style={{ textAlign: 'center', padding: '10px', fontSize: '12px', color: 'var(--accent-color)' }}>
-                    ⌛ Fetching your contacts...
+                    ⌛ {t('common.processing')}
                   </div>
                 )}
 
-                <label className="wa-form-label" style={{ marginTop: '18px' }}>Contact / Phone Number</label>
+                <label className="wa-form-label" style={{ marginTop: '18px' }}>{t('whatsapp.label_phone')}</label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <select
                     value={countryCode}
@@ -1053,17 +1082,17 @@ function App() {
                   </div>
                 )}
 
-                <label className="wa-form-label" style={{ marginTop: '8px' }}>Message</label>
+                <label className="wa-form-label" style={{ marginTop: '8px' }}>{t('whatsapp.label_message')}</label>
                 <textarea
                   value={waMsg}
                   onChange={e => setWaMsg(e.target.value)}
-                  placeholder="Type your message here..."
+                  placeholder={t('whatsapp.placeholder_message')}
                   style={{ minHeight: '80px', resize: 'vertical' }}
                 />
 
                 <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                   <div style={{ flex: 1, position: 'relative' }}>
-                    <label className="wa-form-label">Date</label>
+                    <label className="wa-form-label">{t('whatsapp.date')}</label>
                     <DatePicker
                       selected={waDateTime}
                       onChange={(date: Date | null) => setWaDateTime(date)}
@@ -1071,29 +1100,29 @@ function App() {
                       className="custom-datepicker"
                       minDate={new Date()}
                       maxDate={new Date(new Date().getFullYear(), 11, 31)}
-                      placeholderText="Select Date"
+                      placeholderText={t('common.select')}
                       portalId="root"
                     />
                   </div>
                   <div style={{ flex: 1, position: 'relative' }}>
-                    <label className="wa-form-label">Time</label>
+                    <label className="wa-form-label">{t('whatsapp.time')}</label>
                     <DatePicker
                       selected={waDateTime}
                       onChange={(date: Date | null) => setWaDateTime(date)}
                       showTimeSelect
                       showTimeSelectOnly
                       timeIntervals={1}
-                      timeCaption="Time"
+                      timeCaption={t('whatsapp.time')}
                       dateFormat="h:mm aa"
                       className="custom-datepicker"
-                      placeholderText="Select Time"
+                      placeholderText={t('common.select')}
                       portalId="root"
                     />
                   </div>
                 </div>
 
                 <button className="wa-submit-btn" onClick={handleScheduleWa} style={{ marginTop: '16px' }}>
-                  Schedule
+                  {t('whatsapp.btn_schedule')}
                 </button>
               </div>
             )}
@@ -1101,9 +1130,9 @@ function App() {
             {activeTab === "ImageConverter" && (
               <div className="wa-form-container">
                 <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
-                  <BackIcon /> <span style={{ marginLeft: '8px' }}>Back</span>
+                  <BackIcon /> <span style={{ marginLeft: '8px' }}>{t('common.back')}</span>
                 </div>
-                <ImageConverter showToast={showToast} />
+                <ImageConverter showToast={showToast} t={t} />
               </div>
             )}
           </div>
@@ -1145,7 +1174,7 @@ function App() {
               border: '1px solid var(--border-color)',
               textAlign: 'center'
             }}>
-              <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>Converting PDF...</h3>
+              <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>{t('pdf.processing')}</h3>
               <div style={{
                 width: '100%',
                 height: '8px',
@@ -1172,8 +1201,8 @@ function App() {
         <div className="loading-overlay-full">
           <div className="loading-card">
             <div className="loading-spinner"></div>
-            <h3>Repairing Permissions...</h3>
-            <p>Cleaning macOS security entries. Please wait a few seconds.</p>
+            <h3>{t('repair.title')}</h3>
+            <p>{t('repair.desc')}</p>
           </div>
         </div>
       )}

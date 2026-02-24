@@ -1569,19 +1569,67 @@ body.dark ::-webkit-calendar-picker-indicator {
   left: 24px;
   top: 100px;
   width: 240px;
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(28, 28, 30, 0.95);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-radius: 20px;
   padding: 24px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
   pointer-events: auto;
-  /* Active panel */
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   display: flex;
   flex-direction: column;
   gap: 20px;
   z-index: 10004;
+  color: white;
+}
+
+.close-panel-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 24px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 50%;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.close-panel-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+}
+
+.show-panel-btn {
+  position: fixed;
+  left: 24px;
+  top: 100px;
+  width: 44px;
+  height: 44px;
+  background: rgba(28, 28, 30, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  z-index: 10003;
+  pointer-events: auto;
+  transition: all 0.2s;
+}
+
+.show-panel-btn:hover {
+  transform: scale(1.1);
+  background: #1c1c1e;
 }
 
 .prop-section {
@@ -1591,11 +1639,11 @@ body.dark ::-webkit-calendar-picker-indicator {
 }
 
 .prop-section label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #666;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.5);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
 }
 
 .size-btns {
@@ -1607,8 +1655,9 @@ body.dark ::-webkit-calendar-picker-indicator {
   flex: 1;
   height: 36px;
   border-radius: 8px;
-  border: 1px solid #eee;
-  background: white;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
@@ -1630,14 +1679,15 @@ body.dark ::-webkit-calendar-picker-indicator {
   height: 40px;
   border-radius: 10px;
   border: none;
-  background: #f5f5f7;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
   cursor: pointer;
   font-size: 18px;
   transition: all 0.2s;
 }
 
 .action-btns button:hover {
-  background: #e5e5e7;
+  background: rgba(255, 255, 255, 0.2);
   transform: translateY(-1px);
 }
 
@@ -1708,7 +1758,8 @@ body.dark ::-webkit-calendar-picker-indicator {
 
 .color-swatch.active {
   border-color: #fff;
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
+  transform: scale(1.1);
 }
 
 .paint-canvas {
@@ -1773,6 +1824,7 @@ body.dark ::-webkit-calendar-picker-indicator {
   cursor: pointer;
   box-shadow: 0 0 10px rgba(0, 122, 255, 0.5);
 }
+
 /* Loading Spinner */
 .loading-spinner {
   width: 40px;
@@ -1785,5 +1837,7 @@ body.dark ::-webkit-calendar-picker-indicator {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
