@@ -699,7 +699,7 @@ async fn process_image(
     quality: Option<u8>,
     optimize: bool,
 ) -> Result<(), String> {
-    use image::ImageFormat;
+    use image::{ImageEncoder, ImageFormat};
     use std::fs::File;
 
     println!(
@@ -741,21 +741,60 @@ async fn process_image(
                 .map_err(|e| format!("Failed to encode JPEG: {}", e))?;
         }
         "png" => {
-            img.write_to(&mut std::io::BufWriter::new(output_file), ImageFormat::Png)
-                .map_err(|e| format!("Failed to write PNG: {}", e))?;
+            if optimize {
+                let encoder = image::codecs::png::PngEncoder::new_with_quality(
+                    output_file,
+                    image::codecs::png::CompressionType::Best,
+                    image::codecs::png::FilterType::Adaptive,
+                );
+                encoder
+                    .write_image(img.as_bytes(), img.width(), img.height(), img.color())
+                    .map_err(|e| format!("Failed to encode optimized PNG: {}", e))?;
+            } else {
+                img.write_to(&mut std::io::BufWriter::new(output_file), ImageFormat::Png)
+                    .map_err(|e| format!("Failed to write PNG: {}", e))?;
+            }
         }
         "webp" => {
-            // WebP encoding with quality/optimize
-            let q = if optimize { 75 } else { quality.unwrap_or(80) };
+            // WebP encoding
+            // Note: image crate 0.24.7 doesn't expose quality easily via JpegEncoder-style API for WebP.
+            // save_with_format uses default lossy encoding.
             img.save_with_format(&output_path, ImageFormat::WebP)
                 .map_err(|e| format!("Failed to write WebP: {}", e))?;
-            // Note: the 'image' crate doesn't expose quality easily for WebP via write_to,
-            // but save_with_format uses default values. For more control we'd need a dedicated encoder.
-            // For now, this is a good baseline.
         }
         "avif" => {
-            img.write_to(&mut std::io::BufWriter::new(output_file), ImageFormat::Avif)
-                .map_err(|e| format!("Failed to write AVIF: {}", e))?;
+            let (width, height) = (img.width() as usize, img.height() as usize);
+            let rgba = img.to_rgba8();
+            let pixels = rgba.as_raw();
+
+            // Map raw bytes to RGBA8 pixels manually (safe and simple)
+            let pixels_rgba: Vec<ravif::RGBA8> = pixels
+                .chunks_exact(4)
+                .map(|c| ravif::RGBA8::new(c[0], c[1], c[2], c[3]))
+                .collect();
+
+            let img_ravif = ravif::Img::new(pixels_rgba.as_slice(), width, height);
+
+            let q = if optimize {
+                70.0
+            } else {
+                quality.unwrap_or(80) as f32
+            };
+            let speed = 8; // Faster encoding for better UX
+
+            let res = ravif::Encoder::new()
+                .with_quality(q)
+                .with_speed(speed)
+                .encode_rgba(img_ravif)
+                .map_err(|e| format!("AVIF encoding failed: {}", e))?;
+
+            let avif_file = res.avif_file;
+
+            use std::io::Write;
+            let mut writer = std::io::BufWriter::new(output_file);
+            writer
+                .write_all(&avif_file)
+                .map_err(|e| format!("Failed to write AVIF file: {}", e))?;
         }
         "bmp" => {
             img.write_to(&mut std::io::BufWriter::new(output_file), ImageFormat::Bmp)

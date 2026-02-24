@@ -2432,6 +2432,7 @@ dependencies = [
  "device_query",
  "enigo",
  "image",
+ "ravif",
  "serde",
  "serde_json",
  "tauri",

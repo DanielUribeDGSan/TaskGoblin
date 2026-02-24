@@ -182,6 +182,40 @@ const ImageConverter: React.FC<{ showToast: (msg: string) => void }> = ({ showTo
                 >
                     {isProcessing ? "Processing..." : "Convert and Save"}
                 </button>
+                {isProcessing && (
+                    <div style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        width: '100vw',
+                        height: '100vh',
+                        backgroundColor: 'rgba(0,0,0,0.7)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 10000,
+                        color: 'white',
+                        padding: '24px',
+                        backdropFilter: 'blur(4px)'
+                    }}>
+                        <div style={{
+                            backgroundColor: 'var(--bg-secondary)',
+                            padding: '32px',
+                            borderRadius: '24px',
+                            width: '100%',
+                            maxWidth: '320px',
+                            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                            border: '1px solid var(--border-color)',
+                            textAlign: 'center'
+                        }}>
+                            <div className="loading-spinner"></div>
+                            <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>Converting Image...</h3>
+                            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
+                                This might take a moment depending on the size and format.
+                            </p>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
