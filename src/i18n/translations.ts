@@ -64,6 +64,8 @@ export const translations = {
             confirm_all: "Are you sure you want to close all open apps?",
             confirm_leisure: "Are you sure you want to close leisure apps (Spotify, Netflix, Discord, etc.)?",
             confirm_heavy: "Are you sure you want to close heavy apps (Chrome, Docker, IDEs, etc.)?",
+            label_close_apps: "Close all apps before shutdown",
+            desc_close_apps: "Highly recommended for a clean and safe shutdown.",
         },
         pdf: {
             toast_success: "PDF converted successfully! Saved to Downloads. 📄✨",
@@ -218,6 +220,8 @@ export const translations = {
             confirm_all: "¿Estás seguro de que quieres cerrar todas las apps abiertas?",
             confirm_leisure: "¿Estás seguro de que quieres cerrar las apps de ocio (Spotify, Netflix, Discord, etc.)?",
             confirm_heavy: "¿Estás seguro de que quieres cerrar las apps pesadas (Chrome, Docker, IDEs, etc.)?",
+            label_close_apps: "Cerrar todas las apps antes de apagar",
+            desc_close_apps: "Muy recomendado para un apagado limpio y seguro.",
         },
         pdf: {
             toast_success: "¡PDF convertido con éxito! Guardado en Descargas. 📄✨",

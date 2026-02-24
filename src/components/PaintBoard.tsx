@@ -34,8 +34,6 @@ const PaintPropertiesPanel = memo(function PaintPropertiesPanel({
     opacity,
     setOpacity,
     tool,
-    onClearAll,
-    onReverseOrder,
     onHide,
     t,
     textInput,
@@ -49,8 +47,6 @@ const PaintPropertiesPanel = memo(function PaintPropertiesPanel({
     opacity: number;
     setOpacity: (n: number) => void;
     tool: ToolType;
-    onClearAll: () => void;
-    onReverseOrder: () => void;
     onHide: () => void;
     t: (key: string) => string;
     textInput: string;
@@ -421,9 +417,7 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
         });
     }, []);
 
-    const reverseOrder = useCallback(() => {
-        setElements(prev => [...prev].reverse());
-    }, []);
+
 
     const closePaint = async () => {
         onClose();
@@ -633,8 +627,6 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
                     opacity={opacity}
                     setOpacity={setOpacity}
                     tool={tool}
-                    onClearAll={clearAll}
-                    onReverseOrder={reverseOrder}
                     onHide={() => setIsPanelVisible(false)}
                     t={t}
                     textInput={textInput}
