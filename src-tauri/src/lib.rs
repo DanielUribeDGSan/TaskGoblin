@@ -1309,8 +1309,8 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
         // Wait for the user to select a region (or cancel)
         let region = rx.await.ok().flatten();
 
-        // Restore sidebar window
         if was_visible {
+            let _ = window.unminimize();
             let _ = window.show();
             let _ = window.set_focus();
         }
@@ -1364,7 +1364,13 @@ Write-Output 'CAPTURED'
             cmd.output()
         })
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            if was_visible {
+                let _ = window.unminimize();
+                let _ = window.show();
+            }
+            e.to_string()
+        })?;
 
         match capture_res {
             Err(e) => return Err(format!("Screenshot failed: {}", e)),
@@ -1546,6 +1552,8 @@ async fn write_to_clipboard(text: String) -> Result<(), String> {
 fn notify_user<R: tauri::Runtime>(app: &tauri::AppHandle<R>, _title: &str, message: &str) {
     if let Some(window) = app.get_webview_window("main") {
         // 1. Ensure main window is visible
+        #[cfg(target_os = "windows")]
+        let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
 
