@@ -1335,6 +1335,8 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
 
         let combined_ps = r#"
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 
@@ -2131,13 +2133,24 @@ pub fn run() {
             let app_handle = app.handle().clone();
             // Use a real OS thread for Enigo (it is !Send on Windows, so async tasks fail)
             std::thread::spawn(move || {
-                let mut enigo = match Enigo::new(&Settings::default()) {
-                    Ok(e) => e,
-                    Err(_) => return, // silently skip if Enigo unavailable
+                // Retry initialization if it fails (Windows sometimes needs a moment)
+                let mut enigo_opt = None;
+                for _ in 0..5 {
+                    if let Ok(e) = Enigo::new(&Settings::default()) {
+                        enigo_opt = Some(e);
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_secs(1));
+                }
+
+                let mut enigo = match enigo_opt {
+                    Some(e) => e,
+                    None => return, // Silently exit if still fails after retries
                 };
-                let mut direction: i32 = 1;
+
+                let mut direction: i32 = 3; // Increase to 3px for better visibility on high-res Windows
                 loop {
-                    std::thread::sleep(Duration::from_millis(50));
+                    std::thread::sleep(Duration::from_millis(100)); // Slower interval for smoother feel
                     let state = app_handle.state::<AppState>();
                     let moving = if let Ok(lock) = state.mouse_moving.lock() {
                         *lock
