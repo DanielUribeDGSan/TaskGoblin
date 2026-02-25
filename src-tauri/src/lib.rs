@@ -53,30 +53,43 @@ async fn schedule_whatsapp(phone: String, message: String, delay_secs: u64) -> R
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs)).await;
 
-        // Open the native WhatsApp app pointing to the specific chat
         let url = format!(
             "whatsapp://send?phone={}&text={}",
             sanitized_phone,
             urlencoding::encode(&message)
         );
-        let _ = std::process::Command::new("open").arg(&url).spawn();
 
-        // Wait for WhatsApp to load and focus - increased delay for reliability
-        tokio::time::sleep(tokio::time::Duration::from_secs(4)).await;
+        #[cfg(target_os = "macos")]
+        {
+            let _ = std::process::Command::new("open").arg(&url).spawn();
+            tokio::time::sleep(tokio::time::Duration::from_secs(4)).await;
+            let script = r#"
+                tell application "WhatsApp" to activate
+                delay 0.5
+                tell application "System Events"
+                    keystroke return
+                end tell
+            "#;
+            let _ = std::process::Command::new("osascript")
+                .arg("-e")
+                .arg(script)
+                .output();
+        }
 
-        // Use AppleScript to focus WhatsApp and press return
-        let script = r#"
-            tell application "WhatsApp" to activate
-            delay 0.5
-            tell application "System Events"
-                keystroke return
-            end tell
-        "#;
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            // Open WhatsApp (desktop or Store) via default protocol handler; no console window.
+            let _ = std::process::Command::new("cmd")
+                .args(["/C", "start", "", &url])
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                .spawn();
+        }
 
-        let _ = std::process::Command::new("osascript")
-            .arg("-e")
-            .arg(script)
-            .output(); // Use output to wait for completion
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        {
+            let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
+        }
     });
     Ok(())
 }
