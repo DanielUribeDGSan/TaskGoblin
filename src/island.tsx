@@ -2,11 +2,37 @@ import { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { translations, type Language } from "./i18n/translations";
+
+function getOcrLabel(): string {
+    try {
+        const lang = (localStorage.getItem("app-language") as Language) || "es";
+        return translations[lang]?.common?.ocr_loading ?? translations.es.common.ocr_loading;
+    } catch {
+        return "Copiando el texto...";
+    }
+}
+
+const pillStyle = {
+    backgroundColor: '#000000',
+    borderRadius: '999px',
+    height: '36px',
+    padding: '0 16px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minWidth: '150px',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.8)',
+    position: 'relative' as const
+};
 
 const Island = () => {
     const [timeLeftStr, setTimeLeftStr] = useState("...");
+    const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
+    const isOcrMode = params.get("mode") === "ocr";
 
     useEffect(() => {
+        if (isOcrMode) return;
         let interval: ReturnType<typeof setInterval>;
 
         const tick = async () => {
@@ -46,7 +72,7 @@ const Island = () => {
         interval = setInterval(tick, 1000);
 
         return () => clearInterval(interval);
-    }, []);
+    }, [isOcrMode]);
 
     const handleCancel = async () => {
         try {
@@ -56,6 +82,39 @@ const Island = () => {
             console.error(e);
         }
     };
+
+    if (isOcrMode) {
+        return (
+            <div style={{
+                width: '100vw',
+                height: '100vh',
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'center',
+                paddingTop: '8px',
+                userSelect: 'none',
+                overflow: 'hidden'
+            }}>
+                <div style={pillStyle} data-tauri-drag-region>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', zIndex: 1 }} data-tauri-drag-region>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#28c840" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 0.8s linear infinite' }}>
+                            <path d="M21 12a9 9 0 11-6.22-8.56" />
+                        </svg>
+                        <span style={{
+                            fontSize: '15px',
+                            fontWeight: 600,
+                            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                            color: '#28c840',
+                            letterSpacing: '0.3px'
+                        }} data-tauri-drag-region>
+                            {getOcrLabel()}
+                        </span>
+                    </div>
+                </div>
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            </div>
+        );
+    }
 
     return (
         <div style={{
@@ -68,22 +127,9 @@ const Island = () => {
             userSelect: 'none',
             overflow: 'hidden'
         }}>
-            <div style={{
-                backgroundColor: '#000000',
-                borderRadius: '999px',
-                height: '36px',
-                padding: '0 16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                minWidth: '150px',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.8)', // Deep shadow so it pops on all wallpapers
-                position: 'relative'
-            }} data-tauri-drag-region>
+            <div style={pillStyle} data-tauri-drag-region>
 
-                {/* Left side: subtle green shutdown icon and Time */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', zIndex: 1 }} data-tauri-drag-region>
-                    {/* A small green power icon to match the phone icon from the iOS screenshot */}
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#28c840" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" data-tauri-drag-region>
                         <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line>
                     </svg>
@@ -91,17 +137,15 @@ const Island = () => {
                         fontSize: '15px',
                         fontWeight: 600,
                         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-                        color: '#28c840', // iOS Green
+                        color: '#28c840',
                         letterSpacing: '0.3px',
-                        transform: 'translateY(0.5px)' // slight optical adjustment
+                        transform: 'translateY(0.5px)'
                     }} data-tauri-drag-region>
                         {timeLeftStr}
                     </span>
                 </div>
 
-                {/* Right side: Cancel action as a secondary quiet button that glows on hover */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '16px' }} data-tauri-drag-region>
-                    {/* We can use a small colored waveform icon or just the X */}
                     <button
                         onClick={handleCancel}
                         style={{
@@ -121,7 +165,7 @@ const Island = () => {
                             marginLeft: '4px'
                         }}
                         onMouseEnter={(e) => {
-                            e.currentTarget.style.background = 'rgba(255, 59, 48, 0.9)'; // iOS Red
+                            e.currentTarget.style.background = 'rgba(255, 59, 48, 0.9)';
                             e.currentTarget.style.transform = 'scale(1.05)';
                         }}
                         onMouseLeave={(e) => {

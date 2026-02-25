@@ -1363,6 +1363,41 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
         use tauri::Emitter;
         let _ = app_handle.emit("ocr-start", ());
 
+        // Show island "Copiando texto..." while OCR runs (same pill UI as shutdown countdown)
+        let ocr_island_label = "ocr-island";
+        if let Some(existing) = app_handle.get_webview_window(ocr_island_label) {
+            let _ = existing.close();
+        }
+        let _ocr_island = tauri::WebviewWindowBuilder::new(
+            &app_handle,
+            ocr_island_label,
+            tauri::WebviewUrl::App("island.html?mode=ocr".into()),
+        )
+        .title("OCR")
+        .inner_size(240.0, 60.0)
+        .transparent(true)
+        .decorations(false)
+        .always_on_top(true)
+        .resizable(false)
+        .skip_taskbar(true)
+        .shadow(false)
+        .position(0.0, 30.0)
+        .build()
+        .ok();
+        if let Some(ref island) = app_handle.get_webview_window(ocr_island_label) {
+            if let Ok(Some(monitor)) = island.current_monitor() {
+                let mw = monitor.size().width as f64;
+                let ww = island
+                    .outer_size()
+                    .unwrap_or(tauri::PhysicalSize::new(240, 60))
+                    .width as f64;
+                let x = mw / 2.0 - ww / 2.0;
+                let _ = island.set_position(tauri::Position::Physical(
+                    tauri::PhysicalPosition::new(x as i32, 20),
+                ));
+            }
+        }
+
         let temp_image_path = std::env::temp_dir().join("mouse_crazy_ocr_capture.png");
         let temp_image_str = temp_image_path.to_string_lossy().to_string();
 
@@ -1462,6 +1497,9 @@ try {
         })
         .await
         .map_err(|e| {
+            if let Some(w) = app_handle.get_webview_window("ocr-island") {
+                let _ = w.close();
+            }
             if was_visible {
                 let _ = window.unminimize();
                 let _ = window.show();
@@ -1469,7 +1507,10 @@ try {
             e.to_string()
         })?;
 
-        // Restore window AFTER capture is done to avoid obstruction
+        // Close "Copiando texto..." island and restore main window
+        if let Some(w) = app_handle.get_webview_window("ocr-island") {
+            let _ = w.close();
+        }
         let _ = app_handle.emit("ocr-end", ());
         if was_visible {
             let _ = window.unminimize();
