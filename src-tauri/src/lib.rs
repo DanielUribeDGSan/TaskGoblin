@@ -1324,25 +1324,48 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
             return Ok("".to_string());
         }
 
-        let temp_image_path = std::env::temp_dir().join("mouse_crazy_ocr_capture.png");
-        let temp_image_str = temp_image_path.to_string_lossy().to_string();
-
-        // Tiny PowerShell script — only System.Drawing, NO WinForms UI, runs instantly hidden
-        let ps_capture = r#"
+        let combined_ps = r#"
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$null = [Windows.Media.Ocr.OcrEngine,             Windows.Foundation, ContentType=WindowsRuntime]
+$null = [Windows.Graphics.Imaging.BitmapDecoder,  Windows.Graphics,   ContentType=WindowsRuntime]
+$null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics,   ContentType=WindowsRuntime]
+
+$asTaskGM = [System.WindowsRuntimeSystemExtensions].GetMethods() |
+    Where-Object { $_.Name -eq 'AsTask' -and $_.IsGenericMethodDefinition -and $_.GetParameters().Count -eq 1 } |
+    Select-Object -First 1
+
+function Await { param($op, $type)
+    $asTaskGM.MakeGenericMethod($type).Invoke($null, @($op)).GetAwaiter().GetResult()
+}
+
 $x=[int]$env:CAP_X; $y=[int]$env:CAP_Y; $w=[int]$env:CAP_W; $h=[int]$env:CAP_H
 $bmp = New-Object System.Drawing.Bitmap($w, $h)
 $g   = [System.Drawing.Graphics]::FromImage($bmp)
 $g.CopyFromScreen($x, $y, 0, 0, (New-Object System.Drawing.Size($w, $h)))
 $g.Dispose()
-$bmp.Save($env:OCR_IMG_PATH, [System.Drawing.Imaging.ImageFormat]::Png)
+
+$ms = New-Object System.IO.MemoryStream
+$bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
 $bmp.Dispose()
-Write-Output 'CAPTURED'
+$ms.Position = 0
+$ras = [System.IO.WindowsRuntimeStreamExtensions]::AsRandomAccessStream($ms)
+
+$decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($ras)) ([Windows.Graphics.Imaging.BitmapDecoder])
+$softBmp = Await ($decoder.GetSoftwareBitmapAsync())                            ([Windows.Graphics.Imaging.SoftwareBitmap])
+$ms.Dispose()
+
+$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+if ($null -eq $engine) {
+    $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage((New-Object Windows.Globalization.Language('en-US')))
+}
+
+$result = Await ($engine.RecognizeAsync($softBmp)) ([Windows.Media.Ocr.OcrResult])
+($result.Lines | ForEach-Object { $_.Text }) -join "`n"
 "#;
 
-        let img_out = temp_image_str.clone();
-        let capture_res = tauri::async_runtime::spawn_blocking(move || {
+        let ocr_res = tauri::async_runtime::spawn_blocking(move || {
             #[allow(unused_mut)]
             let mut cmd = Command::new("powershell");
             cmd.arg("-NoProfile")
@@ -1350,12 +1373,11 @@ Write-Output 'CAPTURED'
                 .arg("-WindowStyle")
                 .arg("Hidden")
                 .arg("-Command")
-                .arg(ps_capture)
+                .arg(combined_ps)
                 .env("CAP_X", sx.to_string())
                 .env("CAP_Y", sy.to_string())
                 .env("CAP_W", sw.to_string())
-                .env("CAP_H", sh.to_string())
-                .env("OCR_IMG_PATH", &img_out);
+                .env("CAP_H", sh.to_string());
             #[cfg(target_os = "windows")]
             {
                 use std::os::windows::process::CommandExt;
@@ -1371,73 +1393,6 @@ Write-Output 'CAPTURED'
             }
             e.to_string()
         })?;
-
-        match capture_res {
-            Err(e) => return Err(format!("Screenshot failed: {}", e)),
-            Ok(out) if !out.status.success() => {
-                let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-                return Err(format!("Screenshot error: {}", stderr));
-            }
-            _ => {}
-        }
-
-        if !temp_image_path.exists() {
-            return Err("Screenshot file was not created".to_string());
-        }
-
-        // OCR script: System.IO streams (avoids WinRT StorageFile restrictions)
-        let ps_ocr = r#"
-$ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName System.Runtime.WindowsRuntime
-$null = [Windows.Media.Ocr.OcrEngine,             Windows.Foundation, ContentType=WindowsRuntime]
-$null = [Windows.Graphics.Imaging.BitmapDecoder,  Windows.Graphics,   ContentType=WindowsRuntime]
-$null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics,   ContentType=WindowsRuntime]
-
-$asTaskGM = [System.WindowsRuntimeSystemExtensions].GetMethods() |
-    Where-Object { $_.Name -eq 'AsTask' -and $_.IsGenericMethodDefinition -and $_.GetParameters().Count -eq 1 } |
-    Select-Object -First 1
-
-function Await { param($op, $type)
-    $asTaskGM.MakeGenericMethod($type).Invoke($null, @($op)).GetAwaiter().GetResult()
-}
-
-$fileStream = [System.IO.File]::OpenRead($env:OCR_IMG_PATH)
-$ras        = [System.IO.WindowsRuntimeStreamExtensions]::AsRandomAccessStream($fileStream)
-$decoder    = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($ras)) ([Windows.Graphics.Imaging.BitmapDecoder])
-$bmp        = Await ($decoder.GetSoftwareBitmapAsync())                            ([Windows.Graphics.Imaging.SoftwareBitmap])
-$fileStream.Dispose()
-
-$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
-if ($null -eq $engine) {
-    $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage((New-Object Windows.Globalization.Language('en-US')))
-}
-
-$result = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])
-($result.Lines | ForEach-Object { $_.Text }) -join "`n"
-"#;
-
-        let img_for_ocr = temp_image_str.clone();
-        let ocr_res = tauri::async_runtime::spawn_blocking(move || {
-            #[allow(unused_mut)]
-            let mut cmd = Command::new("powershell");
-            cmd.arg("-NoProfile")
-                .arg("-NonInteractive")
-                .arg("-WindowStyle")
-                .arg("Hidden")
-                .arg("-Command")
-                .arg(ps_ocr)
-                .env("OCR_IMG_PATH", &img_for_ocr);
-            #[cfg(target_os = "windows")]
-            {
-                use std::os::windows::process::CommandExt;
-                cmd.creation_flags(0x08000000);
-            }
-            cmd.output()
-        })
-        .await
-        .map_err(|e| e.to_string())?;
-
-        let _ = fs::remove_file(&temp_image_path);
 
         match ocr_res {
             Ok(out) => {
@@ -1456,7 +1411,7 @@ $result = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])
                     Ok(text_out)
                 }
             }
-            Err(e) => Err(format!("Failed to run OCR: {}", e)),
+            Err(e) => Err(format!("Failed to run Combined OCR: {}", e)),
         }
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
