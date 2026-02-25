@@ -367,9 +367,40 @@ async fn toggle_paint_mode(
         }
         Ok(())
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
     {
-        // On non-macos, maybe just toggle window state if possible
+        if active {
+            // Expand window to cover the full primary monitor
+            if let Ok(Some(monitor)) = window.current_monitor() {
+                let size = monitor.size();
+                let _ = window.set_decorations(false);
+                let _ = window.set_resizable(true);
+                let _ = window.set_size(tauri::Size::Physical(*size));
+                let _ = window.set_position(tauri::PhysicalPosition::new(0, 0));
+                let _ = window.set_always_on_top(true);
+                let _ = window.set_ignore_cursor_events(false);
+            }
+        } else {
+            // Restore sidebar size — keep the window VISIBLE on Windows (no hide)
+            let _ = window.set_ignore_cursor_events(false);
+            let _ = window.set_always_on_top(false);
+            let _ = window.set_resizable(false);
+            let _ = window.set_decorations(false);
+            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(440.0, 820.0)));
+
+            // Restore last position
+            let pos_lock = state.last_tray_pos.lock().await;
+            if let Some(pos) = *pos_lock {
+                let _ = window.set_position(tauri::Position::Physical(pos));
+            }
+
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+        Ok(())
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
         Ok(())
     }
 }
@@ -418,7 +449,50 @@ async fn close_all_apps() -> Result<(), String> {
             Err(e) => Err(format!("Command execution failed: {}", e)),
         }
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        // On Windows, close all foreground processes except system & our app
+        let keep = [
+            "mouse-crazy-app.exe",
+            "explorer.exe",
+            "taskmgr.exe",
+            "cmd.exe",
+            "powershell.exe",
+            "WindowsTerminal.exe",
+            "svchost.exe",
+            "lsass.exe",
+            "csrss.exe",
+            "wininit.exe",
+            "services.exe",
+            "System",
+        ];
+        // PowerShell: get all visible windows processes except the ones we keep
+        let ps_script = r#"
+$keep = @('mouse-crazy-app.exe','explorer.exe','taskmgr.exe','cmd.exe','powershell.exe','WindowsTerminal.exe','svchost.exe','lsass.exe','csrss.exe','wininit.exe','services.exe','System','SearchUI.exe','ShellExperienceHost.exe','RuntimeBroker.exe','dwm.exe','winlogon.exe')
+Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $keep -notcontains ($_.Name + '.exe') } | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+"#;
+        let _ = keep; // suppress unused warning
+        let _ = tauri::async_runtime::spawn_blocking(move || {
+            #[allow(unused_mut)]
+            let mut cmd = Command::new("powershell");
+            cmd.arg("-NoProfile")
+                .arg("-NonInteractive")
+                .arg("-WindowStyle")
+                .arg("Hidden")
+                .arg("-Command")
+                .arg(ps_script);
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000);
+            }
+            cmd.output()
+        })
+        .await;
+        Ok(())
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         Err("Not supported on this OS".to_string())
     }
@@ -458,7 +532,26 @@ async fn close_leisure_apps() -> Result<(), String> {
         ];
         run_close_apps_by_names(&apps_to_quit).await
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
+    {
+        let apps_to_quit = [
+            "Spotify.exe",
+            "Discord.exe",
+            "Slack.exe",
+            "Telegram.exe",
+            "WhatsApp.exe",
+            "Messenger.exe",
+            "steam.exe",
+            "EpicGamesLauncher.exe",
+            "Battle.net.exe",
+            "Origin.exe",
+            "EADesktop.exe",
+            "GalaxyClient.exe",
+            "Twitch.exe",
+        ];
+        run_close_apps_by_names_win(&apps_to_quit).await
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         Err("Not supported on this OS".to_string())
     }
@@ -496,7 +589,31 @@ async fn close_heavy_apps() -> Result<(), String> {
         ];
         run_close_apps_by_names(&apps_to_quit).await
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
+    {
+        let apps_to_quit = [
+            "chrome.exe",
+            "msedge.exe",
+            "firefox.exe",
+            "brave.exe",
+            "opera.exe",
+            "iexplore.exe",
+            "Code.exe",
+            "devenv.exe",
+            "idea64.exe",
+            "webstorm64.exe",
+            "pycharm64.exe",
+            "studio64.exe",
+            "Figma.exe",
+            "Zoom.exe",
+            "Teams.exe",
+            "AcroRd32.exe",
+            "Acrobat.exe",
+            "Docker Desktop.exe",
+        ];
+        run_close_apps_by_names_win(&apps_to_quit).await
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         Err("Not supported on this OS".to_string())
     }
@@ -539,6 +656,27 @@ async fn run_close_apps_by_names(names: &[&str]) -> Result<(), String> {
         Ok(_) => Ok(()),
         Err(e) => Err(format!("Command execution failed: {}", e)),
     }
+}
+
+#[cfg(target_os = "windows")]
+async fn run_close_apps_by_names_win(names: &[&str]) -> Result<(), String> {
+    use std::process::Command;
+    for name in names {
+        let name_owned = name.to_string();
+        let _ = tauri::async_runtime::spawn_blocking(move || {
+            #[allow(unused_mut)]
+            let mut cmd = Command::new("taskkill");
+            cmd.arg("/F").arg("/IM").arg(&name_owned).arg("/T");
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000);
+            }
+            cmd.output()
+        })
+        .await;
+    }
+    Ok(())
 }
 
 /// Open macOS Focus (Do Not Disturb) settings so user can enable it.
@@ -661,7 +799,52 @@ async fn schedule_shutdown(
 
         Ok(())
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+
+        if delay_secs == 0 {
+            return Err("Delay must be greater than 0".to_string());
+        }
+
+        // Cancel any previous Windows scheduled shutdown
+        let _ = Command::new("shutdown").arg("/a").output();
+
+        // Update state so UI can show the countdown
+        let target_timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + delay_secs;
+        *state.shutdown_target.lock().await = Some(target_timestamp);
+        *state.shutdown_duration.lock().await = Some(delay_secs);
+
+        // Schedule shutdown via Windows built-in command (no admin needed for /s)
+        let secs_str = delay_secs.to_string();
+        let res = tauri::async_runtime::spawn_blocking(move || {
+            #[allow(unused_mut)]
+            let mut cmd = Command::new("shutdown");
+            cmd.arg("/s").arg("/t").arg(&secs_str).arg("/f");
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000);
+            }
+            cmd.output()
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+
+        match res {
+            Ok(out) if out.status.success() => Ok(()),
+            Ok(out) => Err(format!(
+                "shutdown cmd failed: {}",
+                String::from_utf8_lossy(&out.stderr)
+            )),
+            Err(e) => Err(format!("Failed to schedule shutdown: {}", e)),
+        }
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         Err("Not supported on this OS".to_string())
     }
@@ -674,7 +857,7 @@ async fn cancel_shutdown(
 ) -> Result<(), String> {
     let mut tx_lock = state.shutdown_cancel_tx.lock().await;
     if let Some(tx) = tx_lock.take() {
-        let _ = tx.send(()); // Trigger the oneshot receiver
+        let _ = tx.send(()); // Trigger the oneshot receiver (macOS path)
     }
 
     *state.shutdown_target.lock().await = None;
@@ -682,6 +865,23 @@ async fn cancel_shutdown(
 
     if let Some(w) = app_handle.get_webview_window("island") {
         let _ = w.close();
+    }
+
+    // On Windows, abort the OS-level scheduled shutdown
+    #[cfg(target_os = "windows")]
+    {
+        let _ = tauri::async_runtime::spawn_blocking(|| {
+            #[allow(unused_mut)]
+            let mut cmd = std::process::Command::new("shutdown");
+            cmd.arg("/a");
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000);
+            }
+            cmd.output()
+        })
+        .await;
     }
 
     Ok(())
@@ -1082,13 +1282,21 @@ if ($script:selRect.Width -gt 2 -and $script:selRect.Height -gt 2) {
 
         let img_path_for_env = temp_image_str.clone();
         let capture_res = tauri::async_runtime::spawn_blocking(move || {
-            Command::new("powershell")
-                .arg("-NoProfile")
+            #[allow(unused_mut)]
+            let mut cmd = Command::new("powershell");
+            cmd.arg("-NoProfile")
                 .arg("-NonInteractive")
+                .arg("-WindowStyle")
+                .arg("Hidden")
                 .arg("-Command")
                 .arg(ps_capture)
-                .env("OCR_IMG_PATH", &img_path_for_env)
-                .output()
+                .env("OCR_IMG_PATH", &img_path_for_env);
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            }
+            cmd.output()
         })
         .await
         .map_err(|e| e.to_string())?;
@@ -1150,13 +1358,21 @@ Write-Output $text
 
         let img_path_for_ocr = temp_image_str.clone();
         let ocr_res = tauri::async_runtime::spawn_blocking(move || {
-            Command::new("powershell")
-                .arg("-NoProfile")
+            #[allow(unused_mut)]
+            let mut cmd = Command::new("powershell");
+            cmd.arg("-NoProfile")
                 .arg("-NonInteractive")
+                .arg("-WindowStyle")
+                .arg("Hidden")
                 .arg("-Command")
                 .arg(ps_ocr)
-                .env("OCR_IMG_PATH", &img_path_for_ocr)
-                .output()
+                .env("OCR_IMG_PATH", &img_path_for_ocr);
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            }
+            cmd.output()
         })
         .await
         .map_err(|e| e.to_string())?;
@@ -1312,14 +1528,22 @@ async fn convert_pdf_to_word(
 
     emit_progress("Initializing converter...", 0.1);
 
-    // 1. Resolve venv path in the user's home directory
-    let home = std::env::var("HOME").map_err(|e| e.to_string())?;
+    // 1. Resolve venv path — HOME on macOS/Linux, USERPROFILE on Windows
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .map_err(|_| "Could not find home directory (HOME / USERPROFILE not set)".to_string())?;
     let venv_dir = Path::new(&home).join(".taskgoblin_venv");
 
     // 2. Create venv if not exists
     if !venv_dir.exists() {
         emit_progress("Setting up Python environment...", 0.2);
-        let venv_status = Command::new("python3")
+        // On Windows, `python3` may not exist — fall back to `python`
+        let python_cmd = if cfg!(target_os = "windows") {
+            "python"
+        } else {
+            "python3"
+        };
+        let venv_status = Command::new(python_cmd)
             .arg("-m")
             .arg("venv")
             .arg(&venv_dir)
@@ -1327,12 +1551,24 @@ async fn convert_pdf_to_word(
             .map_err(|e| format!("Failed to create venv: {}", e))?;
 
         if !venv_status.success() {
-            return Err("Failed to create Python virtual environment".to_string());
+            return Err(
+                "Failed to create Python virtual environment. Is Python installed?".to_string(),
+            );
         }
     }
 
-    let python_bin = venv_dir.join("bin").join("python3");
-    let pip_bin = venv_dir.join("bin").join("pip3");
+    // Venv executables differ by OS
+    let (python_bin, pip_bin) = if cfg!(target_os = "windows") {
+        (
+            venv_dir.join("Scripts").join("python.exe"),
+            venv_dir.join("Scripts").join("pip.exe"),
+        )
+    } else {
+        (
+            venv_dir.join("bin").join("python3"),
+            venv_dir.join("bin").join("pip3"),
+        )
+    };
 
     // 3. Install pdf2docx if not installed
     let mod_check = Command::new(&python_bin)
@@ -1479,7 +1715,16 @@ async fn set_dialog_open(state: State<'_, AppState>, open: bool) -> Result<(), S
 
 #[tauri::command]
 async fn hide_window(window: tauri::WebviewWindow) {
-    let _ = window.hide();
+    // On macOS: truly hide the window (it's accessed via the menu bar icon)
+    // On Windows: minimize instead — otherwise it disappears from the taskbar
+    #[cfg(target_os = "macos")]
+    {
+        let _ = window.hide();
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = window.minimize();
+    }
 }
 
 fn spawn_key_listener(app_handle: tauri::AppHandle) {
@@ -1669,19 +1914,34 @@ pub fn run() {
                                     let _ = window_clone.set_focus();
                                     let _ = window_clone.emit("open-sidebar", ());
                                 } else {
-                                    // Normal mode: Toggle visibility
-                                    let is_visible = window_clone.is_visible().unwrap_or(false);
-                                    if is_visible {
-                                        let _ = window_clone.hide();
-                                    } else {
+                                    // On macOS: toggle visibility (hide when shown, show when hidden)
+                                    // On Windows: always show/focus since the window stays in taskbar
+                                    #[cfg(target_os = "macos")]
+                                    {
+                                        let is_visible = window_clone.is_visible().unwrap_or(false);
+                                        if is_visible {
+                                            let _ = window_clone.hide();
+                                        } else {
+                                            if let Ok(size) = window_clone.outer_size() {
+                                                let x =
+                                                    (position.x as i32) - (size.width as i32 / 2);
+                                                let pos = tauri::PhysicalPosition::new(x, 30);
+                                                let mut last_pos = state.last_tray_pos.lock().await;
+                                                *last_pos = Some(pos);
+                                                let _ = window_clone.set_position(pos);
+                                            }
+                                            let _ = window_clone.show();
+                                            let _ = window_clone.set_focus();
+                                        }
+                                    }
+                                    #[cfg(not(target_os = "macos"))]
+                                    {
+                                        // On Windows, always bring to front
                                         if let Ok(size) = window_clone.outer_size() {
                                             let x = (position.x as i32) - (size.width as i32 / 2);
                                             let pos = tauri::PhysicalPosition::new(x, 30);
-
-                                            // Save position
                                             let mut last_pos = state.last_tray_pos.lock().await;
                                             *last_pos = Some(pos);
-
                                             let _ = window_clone.set_position(pos);
                                         }
                                         let _ = window_clone.show();
@@ -1715,7 +1975,14 @@ pub fn run() {
                                 .unwrap_or_else(|e| e.into_inner());
 
                             if !is_pet_mode && !is_paint_mode && !is_dialog_open {
-                                let _ = window_clone.hide();
+                                // On Windows: don't auto-hide (would remove from taskbar).
+                                // On macOS: hide normally.
+                                #[cfg(target_os = "macos")]
+                                {
+                                    let _ = window_clone.hide();
+                                }
+                                #[cfg(not(target_os = "macos"))]
+                                let _ = window_clone; // noop — keep window visible on Windows
                             }
                         }
                     }
@@ -1724,22 +1991,25 @@ pub fn run() {
             }
 
             let app_handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                if let Ok(mut enigo) = Enigo::new(&Settings::default()) {
-                    let mut direction = 1;
-                    loop {
-                        tokio::time::sleep(Duration::from_millis(50)).await;
-                        let state = app_handle.state::<AppState>();
-                        let moving = if let Ok(lock) = state.mouse_moving.lock() {
-                            *lock
-                        } else {
-                            false
-                        };
+            // Use a real OS thread for Enigo (it is !Send on Windows, so async tasks fail)
+            std::thread::spawn(move || {
+                let mut enigo = match Enigo::new(&Settings::default()) {
+                    Ok(e) => e,
+                    Err(_) => return, // silently skip if Enigo unavailable
+                };
+                let mut direction: i32 = 1;
+                loop {
+                    std::thread::sleep(Duration::from_millis(50));
+                    let state = app_handle.state::<AppState>();
+                    let moving = if let Ok(lock) = state.mouse_moving.lock() {
+                        *lock
+                    } else {
+                        false
+                    };
 
-                        if moving {
-                            let _ = enigo.move_mouse(direction, 0, enigo::Coordinate::Rel);
-                            direction = -direction;
-                        }
+                    if moving {
+                        let _ = enigo.move_mouse(direction, 0, enigo::Coordinate::Rel);
+                        direction = -direction;
                     }
                 }
             });
