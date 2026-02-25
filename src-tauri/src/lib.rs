@@ -1324,54 +1324,55 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
             return Ok("".to_string());
         }
 
+        let temp_image_path = std::env::temp_dir().join("mouse_crazy_ocr_capture.png");
+        let temp_image_str = temp_image_path.to_string_lossy().to_string();
+
         let combined_ps = r#"
-try {
-    $ErrorActionPreference = 'Stop'
-    Add-Type -AssemblyName System.Drawing
-    Add-Type -AssemblyName System.Runtime.WindowsRuntime
-    $null = [Windows.Media.Ocr.OcrEngine,             Windows.Foundation, ContentType=WindowsRuntime]
-    $null = [Windows.Graphics.Imaging.BitmapDecoder,  Windows.Graphics,   ContentType=WindowsRuntime]
-    $null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics,   ContentType=WindowsRuntime]
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
 
-    $asTaskGM = [System.WindowsRuntimeSystemExtensions].GetMethods() |
-        Where-Object { $_.Name -eq 'AsTask' -and $_.IsGenericMethodDefinition -and $_.GetParameters().Count -eq 1 } |
-        Select-Object -First 1
+# 1. Capture Screen
+$x=[int]$env:CAP_X; $y=[int]$env:CAP_Y; $w=[int]$env:CAP_W; $h=[int]$env:CAP_H
+$bmp = New-Object System.Drawing.Bitmap($w, $h)
+$g   = [System.Drawing.Graphics]::FromImage($bmp)
+$g.CopyFromScreen($x, $y, 0, 0, (New-Object System.Drawing.Size($w, $h)))
+$g.Dispose()
+$bmp.Save($env:OCR_IMG_PATH, [System.Drawing.Imaging.ImageFormat]::Png)
+$bmp.Dispose()
 
-    function Await { param($op, $type)
-        $asTaskGM.MakeGenericMethod($type).Invoke($null, @($op)).GetAwaiter().GetResult()
-    }
+# 2. Perform OCR
+$null = [Windows.Media.Ocr.OcrEngine,             Windows.Foundation, ContentType=WindowsRuntime]
+$null = [Windows.Graphics.Imaging.BitmapDecoder,  Windows.Graphics,   ContentType=WindowsRuntime]
+$null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics,   ContentType=WindowsRuntime]
 
-    $x=[int]$env:CAP_X; $y=[int]$env:CAP_Y; $w=[int]$env:CAP_W; $h=[int]$env:CAP_H
-    $bmp = New-Object System.Drawing.Bitmap($w, $h)
-    $g   = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.CopyFromScreen($x, $y, 0, 0, (New-Object System.Drawing.Size($w, $h)))
-    $g.Dispose()
+$asTaskGM = [System.WindowsRuntimeSystemExtensions].GetMethods() |
+    Where-Object { $_.Name -eq 'AsTask' -and $_.IsGenericMethodDefinition -and $_.GetParameters().Count -eq 1 } |
+    Select-Object -First 1
 
-    $tempPath = [System.IO.Path]::GetTempFileName() + ".png"
-    $bmp.Save($tempPath, [System.Drawing.Imaging.ImageFormat]::Png)
-    $bmp.Dispose()
+function Await { param($op, $type)
+    $asTaskGM.MakeGenericMethod($type).Invoke($null, @($op)).GetAwaiter().GetResult()
+}
 
-    $fileStream = [System.IO.File]::OpenRead($tempPath)
-    $ras        = [System.IO.WindowsRuntimeStreamExtensions]::AsRandomAccessStream($fileStream)
-    $decoder    = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($ras)) ([Windows.Graphics.Imaging.BitmapDecoder])
-    $softBmp    = Await ($decoder.GetSoftwareBitmapAsync())                            ([Windows.Graphics.Imaging.SoftwareBitmap])
-    $fileStream.Dispose()
-    Remove-Item $tempPath -ErrorAction SilentlyContinue
+$fileStream = [System.IO.File]::OpenRead($env:OCR_IMG_PATH)
+$ras        = [System.IO.WindowsRuntimeStreamExtensions]::AsRandomAccessStream($fileStream)
+$decoder    = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($ras)) ([Windows.Graphics.Imaging.BitmapDecoder])
+$softBmp    = Await ($decoder.GetSoftwareBitmapAsync())                            ([Windows.Graphics.Imaging.SoftwareBitmap])
+$fileStream.Dispose()
+Remove-Item $env:OCR_IMG_PATH -ErrorAction SilentlyContinue
 
-    $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
-    if ($null -eq $engine) {
-        $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage((New-Object Windows.Globalization.Language('en-US')))
-    }
+$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+if ($null -eq $engine) {
+    $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage((New-Object Windows.Globalization.Language('en-US')))
+}
 
-    $result = Await ($engine.RecognizeAsync($softBmp)) ([Windows.Media.Ocr.OcrResult])
-    $text = ($result.Lines | ForEach-Object { $_.Text }) -join "`n"
-    Write-Output $text
-} catch {
-    Write-Error $_.Exception.Message
-    exit 1
+$result = Await ($engine.RecognizeAsync($softBmp)) ([Windows.Media.Ocr.OcrResult])
+if ($result -and $result.Lines) {
+    ($result.Lines | ForEach-Object { $_.Text }) -join "`n"
 }
 "#;
 
+        let img_path_env = temp_image_str.clone();
         let ocr_res = tauri::async_runtime::spawn_blocking(move || {
             #[allow(unused_mut)]
             let mut cmd = Command::new("powershell");
@@ -1384,7 +1385,8 @@ try {
                 .env("CAP_X", sx.to_string())
                 .env("CAP_Y", sy.to_string())
                 .env("CAP_W", sw.to_string())
-                .env("CAP_H", sh.to_string());
+                .env("CAP_H", sh.to_string())
+                .env("OCR_IMG_PATH", &img_path_env);
             #[cfg(target_os = "windows")]
             {
                 use std::os::windows::process::CommandExt;
@@ -1406,8 +1408,7 @@ try {
                 let text_out = String::from_utf8_lossy(&out.stdout).trim().to_string();
                 let err_out = String::from_utf8_lossy(&out.stderr).trim().to_string();
 
-                // If the process failed or there's stderr output, report it as error
-                if !out.status.success() || !err_out.is_empty() {
+                if !out.status.success() {
                     Err(format!(
                         "OCR error: {}",
                         if !err_out.is_empty() {
@@ -1799,7 +1800,7 @@ async fn process_screenshot_ocr(window: tauri::WebviewWindow) -> Result<(), Stri
     match extract_text_from_screen(window).await {
         Ok(text) => {
             if text.trim().is_empty() {
-                // User cancelled or no text found - do nothing silent
+                notify_user(&app_handle, "OCR", "No text found in selection.");
                 return Ok(());
             }
 
