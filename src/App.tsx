@@ -198,6 +198,7 @@ function App() {
   const [showMainShutdownPicker, setShowMainShutdownPicker] = useState<boolean>(false);
   const [shouldCloseAppsOnShutdown, setShouldCloseAppsOnShutdown] = useState(false);
   const [isPaintActive, setIsPaintActive] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
   const checkAccessibility = async () => {
     try {
       const isEnabled = await invoke("check_accessibility");
@@ -256,10 +257,12 @@ function App() {
   }, [activeTab]);
 
   useEffect(() => {
-    // Check initial mouse state from rust
     invoke("is_mouse_moving").then((state) => {
       setIsMouseMoving(state as boolean);
     }).catch(console.error);
+
+    const unlistenStart = listen("ocr-start", () => setIsExtracting(true));
+    const unlistenEnd = listen("ocr-end", () => setIsExtracting(false));
 
     // Check autostart state
     isEnabled().then(setIsAutostartEnabled).catch(console.error);
@@ -359,6 +362,8 @@ function App() {
       unlistenSidebar.then(u => u());
       unlistenToast.then(u => u());
       unlistenPdf.then(fn => fn());
+      unlistenStart.then(fn => fn());
+      unlistenEnd.then(fn => fn());
     };
   }, []);
 
@@ -1539,6 +1544,31 @@ function App() {
               {t('common.confirm')}
             </button>
           </div>
+        </div>
+      )}
+
+      {isExtracting && (
+        <div style={{
+          position: 'fixed',
+          top: '32px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: 'rgba(0,0,0,0.85)',
+          backdropFilter: 'blur(12px)',
+          padding: '12px 24px',
+          borderRadius: '24px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          zIndex: 11000,
+          border: '1px solid rgba(255,255,255,0.1)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          color: 'white',
+          minWidth: '200px',
+          justifyContent: 'center'
+        }}>
+          <div className="loading-spinner" style={{ width: '18px', height: '18px', borderWidth: '2px' }} />
+          <span style={{ fontSize: '14px', fontWeight: 500, letterSpacing: '-0.01em' }}>{t('common.ocr_loading')}</span>
         </div>
       )}
 

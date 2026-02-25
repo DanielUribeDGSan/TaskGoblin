@@ -1338,6 +1338,9 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
             return Ok("".to_string());
         }
 
+        use tauri::Emitter;
+        let _ = app_handle.emit("ocr-start", ());
+
         let temp_image_path = std::env::temp_dir().join("mouse_crazy_ocr_capture.png");
         let temp_image_str = temp_image_path.to_string_lossy().to_string();
 
@@ -1378,12 +1381,15 @@ try {
 
     $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
     if ($null -eq $engine) {
+        $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage((New-Object Windows.Globalization.Language('es-ES')))
+    }
+    if ($null -eq $engine) {
         $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage((New-Object Windows.Globalization.Language('en-US')))
     }
 
     $result = Await ($engine.RecognizeAsync($softBmp)) ([Windows.Media.Ocr.OcrResult])
     if ($result -and $result.Lines) {
-        $rawText = ($result.Lines | ForEach-Object { $_.Text }) -join "`n"
+        $rawText = ($result.Lines | ForEach-Object { $_.Text }) -join "`r`n"
         # Bulletproof: Encode output as Base64 to bypass all console encoding issues
         $bytes = [System.Text.Encoding]::UTF8.GetBytes($rawText)
         $b64 = [System.Convert]::ToBase64String($bytes)
@@ -1427,6 +1433,7 @@ try {
         })?;
 
         // Restore window AFTER capture is done to avoid obstruction
+        let _ = app_handle.emit("ocr-end", ());
         if was_visible {
             let _ = window.unminimize();
             let _ = window.show();
@@ -2170,9 +2177,9 @@ pub fn run() {
                     None => return, // Silently exit if still fails after retries
                 };
 
-                let mut offset: i32 = 10;
+                let mut offset: i32 = 30; // 30px diagonal is very aggressive
                 loop {
-                    std::thread::sleep(Duration::from_millis(500));
+                    std::thread::sleep(Duration::from_millis(200)); // Faster interval
                     let state = app_handle.state::<AppState>();
                     let moving = if let Ok(lock) = state.mouse_moving.lock() {
                         *lock

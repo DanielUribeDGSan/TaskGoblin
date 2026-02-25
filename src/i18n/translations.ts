@@ -18,6 +18,7 @@ export const translations = {
             select: "Select",
             close: "Close",
             volver: "Back",
+            ocr_loading: "Copying text...",
         },
         sidebar: {
             main: "MAIN",
@@ -172,8 +173,8 @@ export const translations = {
             processing: "Procesando...",
             save: "Guardar",
             select: "Seleccionar",
-            close: "Cerrar",
             volver: "Volver",
+            ocr_loading: "Copiando el texto...",
         },
         sidebar: {
             main: "PRINCIPAL",
