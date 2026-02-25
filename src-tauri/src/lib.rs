@@ -1254,6 +1254,14 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
                         if !out.status.success() || stdout.starts_with("ERROR:") {
                             let err_msg = if !stdout.is_empty() { stdout } else { stderr };
                             Err(format!("Error OCR: {}", err_msg))
+                        } else if stdout.starts_with("BASE64:") {
+                            // Decode Base64 to get perfect UTF-8 string
+                            let b64_data = stdout.trim_start_matches("BASE64:");
+                            use base64::{engine::general_purpose, Engine as _};
+                            match general_purpose::STANDARD.decode(b64_data) {
+                                Ok(bytes) => Ok(String::from_utf8_lossy(&bytes).to_string()),
+                                Err(_) => Ok(stdout), // fallback if decode fails
+                            }
                         } else {
                             Ok(stdout)
                         }
@@ -1309,62 +1317,91 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
         // Wait for the user to select a region (or cancel)
         let region = rx.await.ok().flatten();
 
-        if was_visible {
-            let _ = window.unminimize();
-            let _ = window.show();
-            let _ = window.set_focus();
-        }
-
         let (sx, sy, sw, sh) = match region {
             Some(r) => r,
-            None => return Ok("".to_string()), // user cancelled
+            None => {
+                if was_visible {
+                    let _ = window.unminimize();
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+                return Ok("".to_string());
+            }
         };
 
         if sw <= 0 || sh <= 0 {
+            if was_visible {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
             return Ok("".to_string());
         }
+
+        use tauri::Emitter;
+        let _ = app_handle.emit("ocr-start", ());
+
+        let temp_image_path = std::env::temp_dir().join("mouse_crazy_ocr_capture.png");
+        let temp_image_str = temp_image_path.to_string_lossy().to_string();
 
         let combined_ps = r#"
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
-$null = [Windows.Media.Ocr.OcrEngine,             Windows.Foundation, ContentType=WindowsRuntime]
-$null = [Windows.Graphics.Imaging.BitmapDecoder,  Windows.Graphics,   ContentType=WindowsRuntime]
-$null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics,   ContentType=WindowsRuntime]
 
-$asTaskGM = [System.WindowsRuntimeSystemExtensions].GetMethods() |
-    Where-Object { $_.Name -eq 'AsTask' -and $_.IsGenericMethodDefinition -and $_.GetParameters().Count -eq 1 } |
-    Select-Object -First 1
+try {
+    # 1. Capture Screen
+    $x=[int]$env:CAP_X; $y=[int]$env:CAP_Y; $w=[int]$env:CAP_W; $h=[int]$env:CAP_H
+    $bmp = New-Object System.Drawing.Bitmap($w, $h)
+    $g   = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.CopyFromScreen($x, $y, 0, 0, (New-Object System.Drawing.Size($w, $h)))
+    $g.Dispose()
+    $bmp.Save($env:OCR_IMG_PATH, [System.Drawing.Imaging.ImageFormat]::Png)
+    $bmp.Dispose()
 
-function Await { param($op, $type)
-    $asTaskGM.MakeGenericMethod($type).Invoke($null, @($op)).GetAwaiter().GetResult()
+    # 2. Perform OCR
+    $null = [Windows.Media.Ocr.OcrEngine,             Windows.Foundation, ContentType=WindowsRuntime]
+    $null = [Windows.Graphics.Imaging.BitmapDecoder,  Windows.Graphics,   ContentType=WindowsRuntime]
+    $null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics,   ContentType=WindowsRuntime]
+
+    $asTaskGM = [System.WindowsRuntimeSystemExtensions].GetMethods() |
+        Where-Object { $_.Name -eq 'AsTask' -and $_.IsGenericMethodDefinition -and $_.GetParameters().Count -eq 1 } |
+        Select-Object -First 1
+
+    function Await { param($op, $type)
+        $asTaskGM.MakeGenericMethod($type).Invoke($null, @($op)).GetAwaiter().GetResult()
+    }
+
+    $fileStream = [System.IO.File]::OpenRead($env:OCR_IMG_PATH)
+    $ras        = [System.IO.WindowsRuntimeStreamExtensions]::AsRandomAccessStream($fileStream)
+    $decoder    = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($ras)) ([Windows.Graphics.Imaging.BitmapDecoder])
+    $softBmp    = Await ($decoder.GetSoftwareBitmapAsync())                            ([Windows.Graphics.Imaging.SoftwareBitmap])
+    $fileStream.Dispose()
+    Remove-Item $env:OCR_IMG_PATH -ErrorAction SilentlyContinue
+
+    $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+    if ($null -eq $engine) {
+        $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage((New-Object Windows.Globalization.Language('es-ES')))
+    }
+    if ($null -eq $engine) {
+        $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage((New-Object Windows.Globalization.Language('en-US')))
+    }
+
+    $result = Await ($engine.RecognizeAsync($softBmp)) ([Windows.Media.Ocr.OcrResult])
+    if ($result -and $result.Lines) {
+        $rawText = ($result.Lines | ForEach-Object { $_.Text }) -join "`r`n"
+        # Bulletproof: Encode output as Base64 to bypass all console encoding issues
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($rawText)
+        $b64 = [System.Convert]::ToBase64String($bytes)
+        Write-Output "B64:$b64"
+    }
+} catch {
+    Write-Error $_.Exception.Message
+    exit 1
 }
-
-$x=[int]$env:CAP_X; $y=[int]$env:CAP_Y; $w=[int]$env:CAP_W; $h=[int]$env:CAP_H
-$bmp = New-Object System.Drawing.Bitmap($w, $h)
-$g   = [System.Drawing.Graphics]::FromImage($bmp)
-$g.CopyFromScreen($x, $y, 0, 0, (New-Object System.Drawing.Size($w, $h)))
-$g.Dispose()
-
-$ms = New-Object System.IO.MemoryStream
-$bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
-$bmp.Dispose()
-$ms.Position = 0
-$ras = [System.IO.WindowsRuntimeStreamExtensions]::AsRandomAccessStream($ms)
-
-$decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($ras)) ([Windows.Graphics.Imaging.BitmapDecoder])
-$softBmp = Await ($decoder.GetSoftwareBitmapAsync())                            ([Windows.Graphics.Imaging.SoftwareBitmap])
-$ms.Dispose()
-
-$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
-if ($null -eq $engine) {
-    $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage((New-Object Windows.Globalization.Language('en-US')))
-}
-
-$result = Await ($engine.RecognizeAsync($softBmp)) ([Windows.Media.Ocr.OcrResult])
-($result.Lines | ForEach-Object { $_.Text }) -join "`n"
 "#;
 
+        let img_path_env = temp_image_str.clone();
         let ocr_res = tauri::async_runtime::spawn_blocking(move || {
             #[allow(unused_mut)]
             let mut cmd = Command::new("powershell");
@@ -1377,7 +1414,8 @@ $result = Await ($engine.RecognizeAsync($softBmp)) ([Windows.Media.Ocr.OcrResult
                 .env("CAP_X", sx.to_string())
                 .env("CAP_Y", sy.to_string())
                 .env("CAP_W", sw.to_string())
-                .env("CAP_H", sh.to_string());
+                .env("CAP_H", sh.to_string())
+                .env("OCR_IMG_PATH", &img_path_env);
             #[cfg(target_os = "windows")]
             {
                 use std::os::windows::process::CommandExt;
@@ -1394,21 +1432,37 @@ $result = Await ($engine.RecognizeAsync($softBmp)) ([Windows.Media.Ocr.OcrResult
             e.to_string()
         })?;
 
+        // Restore window AFTER capture is done to avoid obstruction
+        let _ = app_handle.emit("ocr-end", ());
+        if was_visible {
+            let _ = window.unminimize();
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+
         match ocr_res {
             Ok(out) => {
-                let text_out = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                let err_out = String::from_utf8_lossy(&out.stderr).trim().to_string();
+                let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+
                 if !out.status.success() {
                     Err(format!(
                         "OCR error: {}",
-                        if !err_out.is_empty() {
-                            err_out
+                        if !stderr.is_empty() {
+                            stderr
                         } else {
-                            text_out
+                            "Unknown PowerShell error".to_string()
                         }
                     ))
+                } else if stdout.starts_with("B64:") {
+                    let b64_part = &stdout[4..];
+                    use base64::{engine::general_purpose, Engine as _};
+                    match general_purpose::STANDARD.decode(b64_part) {
+                        Ok(bytes) => Ok(String::from_utf8_lossy(&bytes).to_string()),
+                        Err(_) => Ok(stdout), // fallback
+                    }
                 } else {
-                    Ok(text_out)
+                    Ok(stdout)
                 }
             }
             Err(e) => Err(format!("Failed to run Combined OCR: {}", e)),
@@ -1470,32 +1524,12 @@ async fn write_to_clipboard(text: String) -> Result<(), String> {
     }
     #[cfg(target_os = "windows")]
     {
-        use std::io::Write;
-        use std::process::{Command, Stdio};
-        // Pipe text into PowerShell's [Console]::In + Set-Clipboard via stdin to support Unicode
-        let ps_clip = "$text = [Console]::In.ReadToEnd(); Set-Clipboard -Value $text";
-        let mut child = Command::new("powershell")
-            .arg("-NoProfile")
-            .arg("-NonInteractive")
-            .arg("-Command")
-            .arg(ps_clip)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| format!("Failed to start powershell for clipboard: {}", e))?;
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(text.as_bytes())
-                .map_err(|e| format!("Failed to write clipboard text: {}", e))?;
-        }
-        let output = child
-            .wait_with_output()
-            .map_err(|e| format!("Failed to wait for powershell: {}", e))?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("PowerShell clipboard failed: {}", stderr));
-        }
+        use arboard::Clipboard;
+        let mut clipboard =
+            Clipboard::new().map_err(|e| format!("Failed to access clipboard: {}", e))?;
+        clipboard
+            .set_text(text)
+            .map_err(|e| format!("Failed to set clipboard text: {}", e))?;
         Ok(())
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -1790,7 +1824,7 @@ async fn process_screenshot_ocr(window: tauri::WebviewWindow) -> Result<(), Stri
     match extract_text_from_screen(window).await {
         Ok(text) => {
             if text.trim().is_empty() {
-                // User cancelled or no text found - do nothing silent
+                notify_user(&app_handle, "OCR", "No text found in selection.");
                 return Ok(());
             }
 
@@ -2128,13 +2162,24 @@ pub fn run() {
             let app_handle = app.handle().clone();
             // Use a real OS thread for Enigo (it is !Send on Windows, so async tasks fail)
             std::thread::spawn(move || {
-                let mut enigo = match Enigo::new(&Settings::default()) {
-                    Ok(e) => e,
-                    Err(_) => return, // silently skip if Enigo unavailable
+                // Retry initialization if it fails (Windows sometimes needs a moment)
+                let mut enigo_opt = None;
+                for _ in 0..5 {
+                    if let Ok(e) = Enigo::new(&Settings::default()) {
+                        enigo_opt = Some(e);
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_secs(1));
+                }
+
+                let mut enigo = match enigo_opt {
+                    Some(e) => e,
+                    None => return, // Silently exit if still fails after retries
                 };
-                let mut direction: i32 = 1;
+
+                let mut offset: i32 = 30; // 30px diagonal is very aggressive
                 loop {
-                    std::thread::sleep(Duration::from_millis(50));
+                    std::thread::sleep(Duration::from_millis(200)); // Faster interval
                     let state = app_handle.state::<AppState>();
                     let moving = if let Ok(lock) = state.mouse_moving.lock() {
                         *lock
@@ -2143,8 +2188,9 @@ pub fn run() {
                     };
 
                     if moving {
-                        let _ = enigo.move_mouse(direction, 0, enigo::Coordinate::Rel);
-                        direction = -direction;
+                        // Diagonal movement is more robust
+                        let _ = enigo.move_mouse(offset, offset, enigo::Coordinate::Rel);
+                        offset = -offset;
                     }
                 }
             });
