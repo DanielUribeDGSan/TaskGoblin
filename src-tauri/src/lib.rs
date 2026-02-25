@@ -996,9 +996,196 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
             Err(e) => Err(format!("Fallo al iniciar screencapture: {}", e)),
         }
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
     {
-        Err("OCR is only supported on macOS".to_string())
+        use std::fs;
+        use std::process::Command;
+
+        let was_visible = window.is_visible().unwrap_or(false);
+        if was_visible {
+            let _ = window.hide();
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        }
+
+        let temp_image_path = std::env::temp_dir().join("mouse_crazy_ocr_capture.png");
+        let temp_image_str = temp_image_path.to_string_lossy().to_string();
+
+        // PowerShell script for interactive region capture.
+        // We pass the output path via the OCR_IMG_PATH env var to avoid format! escaping issues.
+        let ps_capture = r#"
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+$outPath = $env:OCR_IMG_PATH
+$screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+$bitmap = New-Object System.Drawing.Bitmap($screen.Width, $screen.Height)
+$gfx = [System.Drawing.Graphics]::FromImage($bitmap)
+$gfx.CopyFromScreen($screen.Location, [System.Drawing.Point]::Empty, $screen.Size)
+
+$form = New-Object System.Windows.Forms.Form
+$form.FormBorderStyle = 'None'
+$form.WindowState = 'Maximized'
+$form.BackColor = [System.Drawing.Color]::Black
+$form.Opacity = 0.4
+$form.TopMost = $true
+$form.Cursor = [System.Windows.Forms.Cursors]::Cross
+
+$script:startPoint = [System.Drawing.Point]::Empty
+$script:selRect   = [System.Drawing.Rectangle]::Empty
+$script:drawing   = $false
+
+$form.Add_MouseDown({
+    $script:startPoint = $form.PointToClient([System.Windows.Forms.Cursor]::Position)
+    $script:drawing = $true
+})
+
+$form.Add_MouseMove({
+    if ($script:drawing) {
+        $cur = $form.PointToClient([System.Windows.Forms.Cursor]::Position)
+        $x = [Math]::Min($script:startPoint.X, $cur.X)
+        $y = [Math]::Min($script:startPoint.Y, $cur.Y)
+        $w = [Math]::Abs($cur.X - $script:startPoint.X)
+        $h = [Math]::Abs($cur.Y - $script:startPoint.Y)
+        $script:selRect = New-Object System.Drawing.Rectangle($x, $y, $w, $h)
+        $form.Refresh()
+    }
+})
+
+$form.Add_Paint({
+    if ($script:drawing -and $script:selRect.Width -gt 0) {
+        $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::White, 2)
+        $_.Graphics.DrawRectangle($pen, $script:selRect)
+    }
+})
+
+$form.Add_MouseUp({
+    $script:drawing = $false
+    $form.Close()
+})
+
+$form.Add_KeyDown({
+    if ($_.KeyCode -eq 'Escape') { $script:selRect = [System.Drawing.Rectangle]::Empty; $form.Close() }
+})
+
+[System.Windows.Forms.Application]::EnableVisualStyles()
+$form.ShowDialog() | Out-Null
+
+if ($script:selRect.Width -gt 2 -and $script:selRect.Height -gt 2) {
+    $cropped = $bitmap.Clone($script:selRect, $bitmap.PixelFormat)
+    $cropped.Save($outPath, [System.Drawing.Imaging.ImageFormat]::Png)
+    Write-Output 'CAPTURED'
+} else {
+    Write-Output 'CANCELLED'
+}
+"#;
+
+        let img_path_for_env = temp_image_str.clone();
+        let capture_res = tauri::async_runtime::spawn_blocking(move || {
+            Command::new("powershell")
+                .arg("-NoProfile")
+                .arg("-NonInteractive")
+                .arg("-Command")
+                .arg(ps_capture)
+                .env("OCR_IMG_PATH", &img_path_for_env)
+                .output()
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+
+        if was_visible {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+
+        let capture_output = capture_res.map_err(|e| format!("Failed to launch capture: {}", e))?;
+        let stdout = String::from_utf8_lossy(&capture_output.stdout)
+            .trim()
+            .to_string();
+
+        if stdout.contains("CANCELLED") || !temp_image_path.exists() {
+            return Ok("".to_string());
+        }
+
+        if !capture_output.status.success() && !temp_image_path.exists() {
+            let stderr = String::from_utf8_lossy(&capture_output.stderr)
+                .trim()
+                .to_string();
+            return Err(format!("Screen capture failed: {}", stderr));
+        }
+
+        // Run OCR via Windows.Media.Ocr through PowerShell.
+        // Image path passed via env var to avoid escaping issues with backslashes.
+        let ps_ocr = r#"
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$null = [Windows.Storage.StorageFile,    Windows.Storage,  ContentType=WindowsRuntime]
+$null = [Windows.Media.Ocr.OcrEngine,    Windows.Foundation, ContentType=WindowsRuntime]
+$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Graphics, ContentType=WindowsRuntime]
+
+function Await {
+    param($WinRtTask, $ResultType)
+    $methods = [System.WindowsRuntimeSystemExtensions].GetMethods()
+    $asTask  = $methods | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 } | Select-Object -First 1
+    $netTask = $asTask.MakeGenericMethod($ResultType).Invoke($null, @($WinRtTask))
+    $netTask.Wait() | Out-Null
+    $netTask.Result
+}
+
+$imgPath = $env:OCR_IMG_PATH
+$file    = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($imgPath)) ([Windows.Storage.StorageFile])
+$stream  = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
+$decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
+$bmp     = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
+
+$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+if ($null -eq $engine) {
+    $lang   = New-Object Windows.Globalization.Language('en-US')
+    $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($lang)
+}
+$result = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])
+$text   = ($result.Lines | ForEach-Object { $_.Text }) -join "`n"
+Write-Output $text
+"#;
+
+        let img_path_for_ocr = temp_image_str.clone();
+        let ocr_res = tauri::async_runtime::spawn_blocking(move || {
+            Command::new("powershell")
+                .arg("-NoProfile")
+                .arg("-NonInteractive")
+                .arg("-Command")
+                .arg(ps_ocr)
+                .env("OCR_IMG_PATH", &img_path_for_ocr)
+                .output()
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+
+        let _ = fs::remove_file(&temp_image_path);
+
+        match ocr_res {
+            Ok(out) => {
+                let text_out = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                let err_out = String::from_utf8_lossy(&out.stderr).trim().to_string();
+                if !out.status.success() {
+                    Err(format!(
+                        "OCR error: {}",
+                        if !err_out.is_empty() {
+                            err_out
+                        } else {
+                            text_out
+                        }
+                    ))
+                } else {
+                    Ok(text_out)
+                }
+            }
+            Err(e) => Err(format!("Failed to run OCR script: {}", e)),
+        }
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        Err("OCR is only supported on macOS and Windows".to_string())
     }
 }
 
@@ -1050,7 +1237,37 @@ async fn write_to_clipboard(text: String) -> Result<(), String> {
         }
         Ok(())
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
+    {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+        // Pipe text into PowerShell's [Console]::In + Set-Clipboard via stdin to support Unicode
+        let ps_clip = "$text = [Console]::In.ReadToEnd(); Set-Clipboard -Value $text";
+        let mut child = Command::new("powershell")
+            .arg("-NoProfile")
+            .arg("-NonInteractive")
+            .arg("-Command")
+            .arg(ps_clip)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("Failed to start powershell for clipboard: {}", e))?;
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin
+                .write_all(text.as_bytes())
+                .map_err(|e| format!("Failed to write clipboard text: {}", e))?;
+        }
+        let output = child
+            .wait_with_output()
+            .map_err(|e| format!("Failed to wait for powershell: {}", e))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("PowerShell clipboard failed: {}", stderr));
+        }
+        Ok(())
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         Err("Not supported on this OS".to_string())
     }
