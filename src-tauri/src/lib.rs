@@ -1598,71 +1598,7 @@ async fn convert_pdf_to_word(
         );
     };
 
-    emit_progress("Initializing converter...", 0.1);
-
-    // 1. Resolve venv path — HOME on macOS/Linux, USERPROFILE on Windows
-    let home = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .map_err(|_| "Could not find home directory (HOME / USERPROFILE not set)".to_string())?;
-    let venv_dir = Path::new(&home).join(".taskgoblin_venv");
-
-    // 2. Create venv if not exists
-    if !venv_dir.exists() {
-        emit_progress("Setting up Python environment...", 0.2);
-        // On Windows, `python3` may not exist — fall back to `python`
-        let python_cmd = if cfg!(target_os = "windows") {
-            "python"
-        } else {
-            "python3"
-        };
-        let venv_status = Command::new(python_cmd)
-            .arg("-m")
-            .arg("venv")
-            .arg(&venv_dir)
-            .status()
-            .map_err(|e| format!("Failed to create venv: {}", e))?;
-
-        if !venv_status.success() {
-            return Err(
-                "Failed to create Python virtual environment. Is Python installed?".to_string(),
-            );
-        }
-    }
-
-    // Venv executables differ by OS
-    let (python_bin, pip_bin) = if cfg!(target_os = "windows") {
-        (
-            venv_dir.join("Scripts").join("python.exe"),
-            venv_dir.join("Scripts").join("pip.exe"),
-        )
-    } else {
-        (
-            venv_dir.join("bin").join("python3"),
-            venv_dir.join("bin").join("pip3"),
-        )
-    };
-
-    // 3. Install pdf2docx if not installed
-    let mod_check = Command::new(&python_bin)
-        .arg("-c")
-        .arg("import pdf2docx")
-        .status()
-        .map_err(|e| format!("Failed to check pdf2docx: {}", e))?;
-
-    if !mod_check.success() {
-        emit_progress("Installing libraries (first time only)...", 0.4);
-        let pip_status = Command::new(&pip_bin)
-            .arg("install")
-            .arg("pdf2docx")
-            .status()
-            .map_err(|e| format!("Failed to install pdf2docx: {}", e))?;
-
-        if !pip_status.success() {
-            return Err("Failed to install pdf2docx via pip".to_string());
-        }
-    }
-
-    // 4. Resolve Downloads folder
+    // ── Resolve Downloads folder (shared by both platforms) ─────────────────
     let downloads_dir = app_handle
         .path()
         .download_dir()
@@ -1680,32 +1616,65 @@ async fn convert_pdf_to_word(
     let output_path = downloads_dir.join(format!("{}.docx", file_name));
     let output_str = output_path.to_string_lossy().to_string();
 
-    emit_progress("Converting PDF to Word...", 0.6);
+    // ── macOS: Python + pdf2docx (unchanged) ────────────────────────────────
+    #[cfg(target_os = "macos")]
+    {
+        emit_progress("Initializing converter...", 0.1);
 
-    // A python script that accepts arguments: pdf_file, docx_file
-    let py_script = r#"
+        // 1. Resolve venv path in home dir
+        let home = std::env::var("HOME").map_err(|e| e.to_string())?;
+        let venv_dir = Path::new(&home).join(".taskgoblin_venv");
+
+        // 2. Create venv if not present
+        if !venv_dir.exists() {
+            emit_progress("Setting up Python environment...", 0.2);
+            let venv_status = Command::new("python3")
+                .arg("-m")
+                .arg("venv")
+                .arg(&venv_dir)
+                .status()
+                .map_err(|e| format!("Failed to create venv: {}", e))?;
+            if !venv_status.success() {
+                return Err("Failed to create Python virtual environment".to_string());
+            }
+        }
+
+        let python_bin = venv_dir.join("bin").join("python3");
+        let pip_bin = venv_dir.join("bin").join("pip3");
+
+        // 3. Install pdf2docx if needed
+        let mod_check = Command::new(&python_bin)
+            .arg("-c")
+            .arg("import pdf2docx")
+            .status()
+            .map_err(|e| format!("Failed to check pdf2docx: {}", e))?;
+
+        if !mod_check.success() {
+            emit_progress("Installing libraries (first time only)...", 0.4);
+            let pip_status = Command::new(&pip_bin)
+                .arg("install")
+                .arg("pdf2docx")
+                .status()
+                .map_err(|e| format!("Failed to install pdf2docx: {}", e))?;
+            if !pip_status.success() {
+                return Err("Failed to install pdf2docx via pip".to_string());
+            }
+        }
+
+        emit_progress("Converting PDF to Word...", 0.6);
+
+        let py_script = r#"
 import sys
 import os
 from pdf2docx import Converter
 
-# Disable ANSI colors in logs
 os.environ['TERM'] = 'dumb'
-
-pdf_file = sys.argv[1]
+pdf_file  = sys.argv[1]
 docx_file = sys.argv[2]
 try:
     cv = Converter(pdf_file)
-    # Advanced settings to improve font and position preservation:
-    # - multi_processing: Set to False for higher stability on some Mac environments
-    cv.convert(
-        docx_file, 
-        start=0, 
-        end=None, 
-        multi_processing=False,
-        line_margin=0.5,
-        word_margin=0.2,
-        char_margin=0.05
-    )
+    cv.convert(docx_file, start=0, end=None, multi_processing=False,
+               line_margin=0.5, word_margin=0.2, char_margin=0.05)
     cv.close()
     print("STATUS:SUCCESS")
 except Exception as e:
@@ -1717,37 +1686,115 @@ except Exception as e:
     sys.exit(1)
 "#;
 
-    let pdf_path_clone = pdf_path.clone();
-    let output_str_clone = output_str.clone();
+        let pdf_path_clone = pdf_path.clone();
+        let output_str_clone = output_str.clone();
 
-    let output = tauri::async_runtime::spawn_blocking(move || {
-        Command::new(&python_bin)
-            .arg("-c")
-            .arg(py_script)
-            .arg(&pdf_path_clone)
-            .arg(&output_str_clone)
-            .output()
-    })
-    .await
-    .map_err(|e| e.to_string())?
-    .map_err(|e| format!("Failed to execute python converter script: {}", e))?;
+        let output = tauri::async_runtime::spawn_blocking(move || {
+            Command::new(&python_bin)
+                .arg("-c")
+                .arg(py_script)
+                .arg(&pdf_path_clone)
+                .arg(&output_str_clone)
+                .output()
+        })
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| format!("Failed to execute python converter script: {}", e))?;
 
-    if !output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-
-        if stdout.contains("STATUS:ERROR_SCANNED_PDF") {
-            return Err("Este PDF parece ser una imagen o estar escaneado. No se puede convertir a texto editable directamente.".to_string());
-        } else if let Some(err_idx) = stdout.find("STATUS:ERROR:") {
-            let user_err = &stdout[err_idx + 13..];
-            return Err(format!("Error en la conversión: {}", user_err.trim()));
+        if !output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            if stdout.contains("STATUS:ERROR_SCANNED_PDF") {
+                return Err("Este PDF parece ser una imagen o estar escaneado. No se puede convertir a texto editable directamente.".to_string());
+            } else if let Some(err_idx) = stdout.find("STATUS:ERROR:") {
+                let user_err = &stdout[err_idx + 13..];
+                return Err(format!("Error en la conversión: {}", user_err.trim()));
+            }
+            return Err("Hubo un problema técnico al convertir el archivo. Verifica que el PDF no esté protegido.".to_string());
         }
 
-        return Err(format!("Hubo un problema técnico al convertir el archivo. Verifica que el PDF no esté protegido."));
+        emit_progress("Done!", 1.0);
+        return Ok(output_str);
     }
 
-    emit_progress("Done!", 1.0);
+    // ── Windows: Microsoft Word COM automation (no Python needed) ───────────
+    #[cfg(target_os = "windows")]
+    {
+        emit_progress("Opening PDF with Microsoft Word...", 0.3);
 
-    Ok(output_str)
+        // PowerShell script using Word COM object — Word opens the PDF and saves as .docx
+        let ps_script = r#"
+$ErrorActionPreference = 'Stop'
+$pdfPath  = $env:PDF_IN
+$docxPath = $env:DOCX_OUT
+
+try {
+    $word = New-Object -ComObject Word.Application
+} catch {
+    Write-Output "ERROR:Microsoft Word is not installed. Please install Microsoft Office to use PDF conversion."
+    exit 1
+}
+
+$word.Visible = $false
+$word.DisplayAlerts = 0
+
+try {
+    # wdFormatXMLDocument = 12 (docx)
+    $doc = $word.Documents.Open($pdfPath, $false, $true)   # ReadOnly=$true to open PDF
+    $doc.SaveAs([ref]$docxPath, [ref]12)
+    $doc.Close($false)
+    $word.Quit()
+    Write-Output "SUCCESS"
+} catch {
+    try { $word.Quit() } catch {}
+    Write-Output "ERROR:$($_.Exception.Message)"
+    exit 1
+}
+"#;
+
+        let pdf_in = pdf_path.clone();
+        let docx_out = output_str.clone();
+
+        let result = tauri::async_runtime::spawn_blocking(move || {
+            #[allow(unused_mut)]
+            let mut cmd = Command::new("powershell");
+            cmd.arg("-NoProfile")
+                .arg("-NonInteractive")
+                .arg("-WindowStyle")
+                .arg("Hidden")
+                .arg("-Command")
+                .arg(ps_script)
+                .env("PDF_IN", &pdf_in)
+                .env("DOCX_OUT", &docx_out);
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            }
+            cmd.output()
+        })
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| format!("Failed to launch Word: {}", e))?;
+
+        emit_progress("Finishing...", 0.9);
+
+        let stdout = String::from_utf8_lossy(&result.stdout).trim().to_string();
+        let stderr = String::from_utf8_lossy(&result.stderr).trim().to_string();
+
+        if stdout.starts_with("ERROR:") {
+            return Err(stdout.trim_start_matches("ERROR:").to_string());
+        }
+        if !result.status.success() || !stdout.contains("SUCCESS") {
+            let detail = if !stderr.is_empty() { stderr } else { stdout };
+            return Err(format!("Error converting PDF: {}", detail));
+        }
+
+        emit_progress("Done!", 1.0);
+        return Ok(output_str);
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    Err("PDF conversion not supported on this OS".to_string())
 }
 
 #[tauri::command]
