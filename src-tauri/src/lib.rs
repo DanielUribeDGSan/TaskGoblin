@@ -1254,6 +1254,14 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
                         if !out.status.success() || stdout.starts_with("ERROR:") {
                             let err_msg = if !stdout.is_empty() { stdout } else { stderr };
                             Err(format!("Error OCR: {}", err_msg))
+                        } else if stdout.starts_with("BASE64:") {
+                            // Decode Base64 to get perfect UTF-8 string
+                            let b64_data = stdout.trim_start_matches("BASE64:");
+                            use base64::{engine::general_purpose, Engine as _};
+                            match general_purpose::STANDARD.decode(b64_data) {
+                                Ok(bytes) => Ok(String::from_utf8_lossy(&bytes).to_string()),
+                                Err(_) => Ok(stdout), // fallback if decode fails
+                            }
                         } else {
                             Ok(stdout)
                         }
@@ -1335,48 +1343,55 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
 
         let combined_ps = r#"
 $ErrorActionPreference = 'Stop'
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding = [System.Text.Encoding]::UTF8
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 
-# 1. Capture Screen
-$x=[int]$env:CAP_X; $y=[int]$env:CAP_Y; $w=[int]$env:CAP_W; $h=[int]$env:CAP_H
-$bmp = New-Object System.Drawing.Bitmap($w, $h)
-$g   = [System.Drawing.Graphics]::FromImage($bmp)
-$g.CopyFromScreen($x, $y, 0, 0, (New-Object System.Drawing.Size($w, $h)))
-$g.Dispose()
-$bmp.Save($env:OCR_IMG_PATH, [System.Drawing.Imaging.ImageFormat]::Png)
-$bmp.Dispose()
+try {
+    # 1. Capture Screen
+    $x=[int]$env:CAP_X; $y=[int]$env:CAP_Y; $w=[int]$env:CAP_W; $h=[int]$env:CAP_H
+    $bmp = New-Object System.Drawing.Bitmap($w, $h)
+    $g   = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.CopyFromScreen($x, $y, 0, 0, (New-Object System.Drawing.Size($w, $h)))
+    $g.Dispose()
+    $bmp.Save($env:OCR_IMG_PATH, [System.Drawing.Imaging.ImageFormat]::Png)
+    $bmp.Dispose()
 
-# 2. Perform OCR
-$null = [Windows.Media.Ocr.OcrEngine,             Windows.Foundation, ContentType=WindowsRuntime]
-$null = [Windows.Graphics.Imaging.BitmapDecoder,  Windows.Graphics,   ContentType=WindowsRuntime]
-$null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics,   ContentType=WindowsRuntime]
+    # 2. Perform OCR
+    $null = [Windows.Media.Ocr.OcrEngine,             Windows.Foundation, ContentType=WindowsRuntime]
+    $null = [Windows.Graphics.Imaging.BitmapDecoder,  Windows.Graphics,   ContentType=WindowsRuntime]
+    $null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics,   ContentType=WindowsRuntime]
 
-$asTaskGM = [System.WindowsRuntimeSystemExtensions].GetMethods() |
-    Where-Object { $_.Name -eq 'AsTask' -and $_.IsGenericMethodDefinition -and $_.GetParameters().Count -eq 1 } |
-    Select-Object -First 1
+    $asTaskGM = [System.WindowsRuntimeSystemExtensions].GetMethods() |
+        Where-Object { $_.Name -eq 'AsTask' -and $_.IsGenericMethodDefinition -and $_.GetParameters().Count -eq 1 } |
+        Select-Object -First 1
 
-function Await { param($op, $type)
-    $asTaskGM.MakeGenericMethod($type).Invoke($null, @($op)).GetAwaiter().GetResult()
-}
+    function Await { param($op, $type)
+        $asTaskGM.MakeGenericMethod($type).Invoke($null, @($op)).GetAwaiter().GetResult()
+    }
 
-$fileStream = [System.IO.File]::OpenRead($env:OCR_IMG_PATH)
-$ras        = [System.IO.WindowsRuntimeStreamExtensions]::AsRandomAccessStream($fileStream)
-$decoder    = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($ras)) ([Windows.Graphics.Imaging.BitmapDecoder])
-$softBmp    = Await ($decoder.GetSoftwareBitmapAsync())                            ([Windows.Graphics.Imaging.SoftwareBitmap])
-$fileStream.Dispose()
-Remove-Item $env:OCR_IMG_PATH -ErrorAction SilentlyContinue
+    $fileStream = [System.IO.File]::OpenRead($env:OCR_IMG_PATH)
+    $ras        = [System.IO.WindowsRuntimeStreamExtensions]::AsRandomAccessStream($fileStream)
+    $decoder    = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($ras)) ([Windows.Graphics.Imaging.BitmapDecoder])
+    $softBmp    = Await ($decoder.GetSoftwareBitmapAsync())                            ([Windows.Graphics.Imaging.SoftwareBitmap])
+    $fileStream.Dispose()
+    Remove-Item $env:OCR_IMG_PATH -ErrorAction SilentlyContinue
 
-$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
-if ($null -eq $engine) {
-    $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage((New-Object Windows.Globalization.Language('en-US')))
-}
+    $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+    if ($null -eq $engine) {
+        $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage((New-Object Windows.Globalization.Language('en-US')))
+    }
 
-$result = Await ($engine.RecognizeAsync($softBmp)) ([Windows.Media.Ocr.OcrResult])
-if ($result -and $result.Lines) {
-    ($result.Lines | ForEach-Object { $_.Text }) -join "`n"
+    $result = Await ($engine.RecognizeAsync($softBmp)) ([Windows.Media.Ocr.OcrResult])
+    if ($result -and $result.Lines) {
+        $rawText = ($result.Lines | ForEach-Object { $_.Text }) -join "`n"
+        # Bulletproof: Encode output as Base64 to bypass all console encoding issues
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($rawText)
+        $b64 = [System.Convert]::ToBase64String($bytes)
+        Write-Output "B64:$b64"
+    }
+} catch {
+    Write-Error $_.Exception.Message
+    exit 1
 }
 "#;
 
@@ -1420,20 +1435,27 @@ if ($result -and $result.Lines) {
 
         match ocr_res {
             Ok(out) => {
-                let text_out = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                let err_out = String::from_utf8_lossy(&out.stderr).trim().to_string();
+                let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
 
                 if !out.status.success() {
                     Err(format!(
                         "OCR error: {}",
-                        if !err_out.is_empty() {
-                            err_out
+                        if !stderr.is_empty() {
+                            stderr
                         } else {
                             "Unknown PowerShell error".to_string()
                         }
                     ))
+                } else if stdout.starts_with("B64:") {
+                    let b64_part = &stdout[4..];
+                    use base64::{engine::general_purpose, Engine as _};
+                    match general_purpose::STANDARD.decode(b64_part) {
+                        Ok(bytes) => Ok(String::from_utf8_lossy(&bytes).to_string()),
+                        Err(_) => Ok(stdout), // fallback
+                    }
                 } else {
-                    Ok(text_out)
+                    Ok(stdout)
                 }
             }
             Err(e) => Err(format!("Failed to run Combined OCR: {}", e)),
@@ -2148,9 +2170,9 @@ pub fn run() {
                     None => return, // Silently exit if still fails after retries
                 };
 
-                let mut direction: i32 = 3; // Increase to 3px for better visibility on high-res Windows
+                let mut offset: i32 = 10;
                 loop {
-                    std::thread::sleep(Duration::from_millis(100)); // Slower interval for smoother feel
+                    std::thread::sleep(Duration::from_millis(500));
                     let state = app_handle.state::<AppState>();
                     let moving = if let Ok(lock) = state.mouse_moving.lock() {
                         *lock
@@ -2159,8 +2181,9 @@ pub fn run() {
                     };
 
                     if moving {
-                        let _ = enigo.move_mouse(direction, 0, enigo::Coordinate::Rel);
-                        direction = -direction;
+                        // Diagonal movement is more robust
+                        let _ = enigo.move_mouse(offset, offset, enigo::Coordinate::Rel);
+                        offset = -offset;
                     }
                 }
             });

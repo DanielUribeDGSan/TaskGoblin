@@ -2516,6 +2516,7 @@ name = "mouse-crazy-app"
 version = "0.1.0"
 dependencies = [
  "arboard",
+ "base64 0.22.1",
  "device_query",
  "enigo",
  "image 0.24.9",
