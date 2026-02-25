@@ -6,13 +6,15 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, State, Wry,
 };
-// No longer using tokio::sync::Mutex for simple flags
+// No longer using tokio::sync::Mutex for simpluse std::sync::Arc;
+use std::sync::Arc;
 
 struct AppState {
     mouse_moving: std::sync::Mutex<bool>,
     is_pet_mode: std::sync::Mutex<bool>,
     is_paint_mode: std::sync::Mutex<bool>,
     is_dialog_open: std::sync::Mutex<bool>,
+    is_capturing: Arc<std::sync::Mutex<bool>>, // Arc so it can be cloned into threads
     shutdown_cancel_tx: tokio::sync::Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
     shutdown_target: tokio::sync::Mutex<Option<u64>>,
     shutdown_duration: tokio::sync::Mutex<Option<u64>>,
@@ -810,7 +812,19 @@ async fn schedule_shutdown(
         // Cancel any previous Windows scheduled shutdown
         let _ = Command::new("shutdown").arg("/a").output();
 
-        // Update state so UI can show the countdown
+        // 1. Cancel existing countdown task if any
+        let mut new_rx;
+        {
+            let mut tx_lock = state.shutdown_cancel_tx.lock().await;
+            if let Some(tx) = tx_lock.take() {
+                let _ = tx.send(());
+            }
+            let (new_tx, rx) = tokio::sync::oneshot::channel::<()>();
+            new_rx = rx;
+            *tx_lock = Some(new_tx);
+        }
+
+        // 2. Update state for UI countdown
         let target_timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -819,7 +833,44 @@ async fn schedule_shutdown(
         *state.shutdown_target.lock().await = Some(target_timestamp);
         *state.shutdown_duration.lock().await = Some(delay_secs);
 
-        // Schedule shutdown via Windows built-in command (no admin needed for /s)
+        // 3. Create island countdown window (same as macOS)
+        let window_label = "island";
+        if let Some(existing) = app_handle.get_webview_window(window_label) {
+            let _ = existing.close();
+        }
+        let _island_window = tauri::WebviewWindowBuilder::new(
+            &app_handle,
+            window_label,
+            tauri::WebviewUrl::App("island.html".into()),
+        )
+        .title("Shutdown Scheduler")
+        .inner_size(240.0, 60.0)
+        .transparent(true)
+        .decorations(false)
+        .always_on_top(true)
+        .resizable(false)
+        .skip_taskbar(true)
+        .shadow(false)
+        .position(0.0, 30.0)
+        .build()
+        .map_err(|e| format!("Failed to create island window: {}", e))?;
+
+        // Center island at top of screen
+        if let Some(island) = app_handle.get_webview_window(window_label) {
+            if let Ok(Some(monitor)) = island.current_monitor() {
+                let mw = monitor.size().width as f64;
+                let ww = island
+                    .outer_size()
+                    .unwrap_or(tauri::PhysicalSize::new(240, 60))
+                    .width as f64;
+                let x = mw / 2.0 - ww / 2.0;
+                let _ = island.set_position(tauri::Position::Physical(
+                    tauri::PhysicalPosition::new(x as i32, 20),
+                ));
+            }
+        }
+
+        // 4. Schedule actual OS shutdown via `shutdown /s /t <N>`
         let secs_str = delay_secs.to_string();
         let res = tauri::async_runtime::spawn_blocking(move || {
             #[allow(unused_mut)]
@@ -835,14 +886,28 @@ async fn schedule_shutdown(
         .await
         .map_err(|e| e.to_string())?;
 
-        match res {
-            Ok(out) if out.status.success() => Ok(()),
-            Ok(out) => Err(format!(
-                "shutdown cmd failed: {}",
-                String::from_utf8_lossy(&out.stderr)
-            )),
-            Err(e) => Err(format!("Failed to schedule shutdown: {}", e)),
+        if let Err(e) = res {
+            return Err(format!("Failed to schedule shutdown: {}", e));
         }
+
+        // 5. Spawn cancellable tokio task (closes island on cancel)
+        let app_clone = app_handle.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::select! {
+                _ = tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs)) => {
+                    // OS already scheduled to shut down; just clean up
+                    if let Some(w) = app_clone.get_webview_window("island") {
+                        let _ = w.close();
+                    }
+                }
+                _ = &mut new_rx => {
+                    // User cancelled: OS shutdown already aborted via `shutdown /a` in cancel_shutdown
+                    println!("Windows shutdown task cancelled.");
+                }
+            }
+        });
+
+        Ok(())
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
@@ -1202,16 +1267,17 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
         use std::process::Command;
 
         let was_visible = window.is_visible().unwrap_or(false);
+        // On Windows: minimize (not hide) so the app stays in the taskbar
         if was_visible {
-            let _ = window.hide();
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            let _ = window.minimize();
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         }
 
         let temp_image_path = std::env::temp_dir().join("mouse_crazy_ocr_capture.png");
         let temp_image_str = temp_image_path.to_string_lossy().to_string();
 
-        // PowerShell script for interactive region capture.
-        // We pass the output path via the OCR_IMG_PATH env var to avoid format! escaping issues.
+        // Capture script: WinForms overlay for region selection.
+        // Uses -STA so Windows Forms runs on the correct apartment thread.
         let ps_capture = r#"
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
@@ -1229,6 +1295,7 @@ $form.WindowState = 'Maximized'
 $form.BackColor = [System.Drawing.Color]::Black
 $form.Opacity = 0.4
 $form.TopMost = $true
+$form.ShowInTaskbar = $false
 $form.Cursor = [System.Windows.Forms.Cursors]::Cross
 
 $script:startPoint = [System.Drawing.Point]::Empty
@@ -1284,7 +1351,9 @@ if ($script:selRect.Width -gt 2 -and $script:selRect.Height -gt 2) {
         let capture_res = tauri::async_runtime::spawn_blocking(move || {
             #[allow(unused_mut)]
             let mut cmd = Command::new("powershell");
+            // -STA: Single-Threaded Apartment — required for WinForms to work correctly
             cmd.arg("-NoProfile")
+                .arg("-STA")
                 .arg("-NonInteractive")
                 .arg("-WindowStyle")
                 .arg("Hidden")
@@ -1301,6 +1370,7 @@ if ($script:selRect.Width -gt 2 -and $script:selRect.Height -gt 2) {
         .await
         .map_err(|e| e.to_string())?;
 
+        // Restore window after capture overlay closes
         if was_visible {
             let _ = window.show();
             let _ = window.set_focus();
@@ -1322,37 +1392,38 @@ if ($script:selRect.Width -gt 2 -and $script:selRect.Height -gt 2) {
             return Err(format!("Screen capture failed: {}", stderr));
         }
 
-        // Run OCR via Windows.Media.Ocr through PowerShell.
-        // Image path passed via env var to avoid escaping issues with backslashes.
+        // OCR script: uses System.IO.File + AsRandomAccessStream (avoids StorageFile WinRT access restrictions)
+        // GetAwaiter().GetResult() used instead of Wait(-1) for proper exception unwrapping.
         let ps_ocr = r#"
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
-$null = [Windows.Storage.StorageFile,    Windows.Storage,  ContentType=WindowsRuntime]
-$null = [Windows.Media.Ocr.OcrEngine,    Windows.Foundation, ContentType=WindowsRuntime]
-$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Graphics, ContentType=WindowsRuntime]
+$null = [Windows.Media.Ocr.OcrEngine,             Windows.Foundation, ContentType=WindowsRuntime]
+$null = [Windows.Graphics.Imaging.BitmapDecoder,  Windows.Graphics,   ContentType=WindowsRuntime]
+$null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics,   ContentType=WindowsRuntime]
+
+$asTaskGM = [System.WindowsRuntimeSystemExtensions].GetMethods() |
+    Where-Object { $_.Name -eq 'AsTask' -and $_.IsGenericMethodDefinition -and $_.GetParameters().Count -eq 1 } |
+    Select-Object -First 1
 
 function Await {
-    param($WinRtTask, $ResultType)
-    $methods = [System.WindowsRuntimeSystemExtensions].GetMethods()
-    $asTask  = $methods | Where-Object { $_.Name -eq 'AsTask' -and $_.IsGenericMethodDefinition -and $_.GetParameters().Count -eq 1 } | Select-Object -First 1
-    $netTask = $asTask.MakeGenericMethod($ResultType).Invoke($null, @($WinRtTask))
-    $netTask.Wait(-1) | Out-Null
-    $netTask.Result
+    param($op, $type)
+    $asTaskGM.MakeGenericMethod($type).Invoke($null, @($op)).GetAwaiter().GetResult()
 }
 
-$imgPath = $env:OCR_IMG_PATH
-$file    = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($imgPath)) ([Windows.Storage.StorageFile])
-$stream  = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
-$decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
-$bmp     = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
+# Read file via System.IO (avoids WinRT StorageFile access restrictions)
+$fileStream = [System.IO.File]::OpenRead($env:OCR_IMG_PATH)
+$ras        = [System.IO.WindowsRuntimeStreamExtensions]::AsRandomAccessStream($fileStream)
+$decoder    = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($ras)) ([Windows.Graphics.Imaging.BitmapDecoder])
+$bmp        = Await ($decoder.GetSoftwareBitmapAsync())                            ([Windows.Graphics.Imaging.SoftwareBitmap])
 
 $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
 if ($null -eq $engine) {
-    $lang   = New-Object Windows.Globalization.Language('en-US')
-    $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($lang)
+    $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage((New-Object Windows.Globalization.Language('en-US')))
 }
+
 $result = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])
 $text   = ($result.Lines | ForEach-Object { $_.Text }) -join "`n"
+$fileStream.Dispose()
 Write-Output $text
 "#;
 
@@ -1361,6 +1432,7 @@ Write-Output $text
             #[allow(unused_mut)]
             let mut cmd = Command::new("powershell");
             cmd.arg("-NoProfile")
+                .arg("-STA")
                 .arg("-NonInteractive")
                 .arg("-WindowStyle")
                 .arg("Hidden")
@@ -1752,12 +1824,37 @@ fn spawn_key_listener(app_handle: tauri::AppHandle) {
                 if tap_count == 3 {
                     tap_count = 0; // reset
                     let handle = app_handle.clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Some(window) = handle.get_webview_window("main") {
-                            // Trigger the unified screenshot process
-                            let _ = process_screenshot_ocr(window).await;
+
+                    // Guard: clone the Arc so we own it independently of the handle lifetime
+                    let cap_flag = {
+                        let state = app_handle.state::<AppState>();
+                        Arc::clone(&state.is_capturing)
+                    };
+
+                    let already_capturing = match cap_flag.lock() {
+                        Ok(mut cap) => {
+                            if *cap {
+                                true
+                            } else {
+                                *cap = true;
+                                false
+                            }
                         }
-                    });
+                        Err(_) => true,
+                    };
+
+                    if !already_capturing {
+                        let cap_flag2 = Arc::clone(&cap_flag);
+                        tauri::async_runtime::spawn(async move {
+                            if let Some(window) = handle.get_webview_window("main") {
+                                let _ = process_screenshot_ocr(window.clone()).await;
+                            }
+                            // Release the guard
+                            if let Ok(mut cap) = cap_flag2.lock() {
+                                *cap = false;
+                            }
+                        });
+                    }
                 }
             }
 
@@ -1811,6 +1908,7 @@ pub fn run() {
                 is_pet_mode: std::sync::Mutex::new(false),
                 is_paint_mode: std::sync::Mutex::new(false),
                 is_dialog_open: std::sync::Mutex::new(false),
+                is_capturing: Arc::new(std::sync::Mutex::new(false)),
                 shutdown_cancel_tx: tokio::sync::Mutex::new(None),
                 shutdown_target: tokio::sync::Mutex::new(None),
                 shutdown_duration: tokio::sync::Mutex::new(None),
