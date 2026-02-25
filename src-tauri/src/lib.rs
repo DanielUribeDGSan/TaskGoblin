@@ -1141,6 +1141,28 @@ async fn process_image(
     Ok(())
 }
 
+/// Fixes common OCR misreads for Spanish (e.g. å→á).
+#[cfg(target_os = "windows")]
+fn fix_ocr_spanish_accents(s: String) -> String {
+    s.replace('å', "á")
+        .replace('Å', "Á")
+        .replace('ã', "á")
+        .replace('Ã', "Á")
+        .replace('õ', "ó")
+        .replace('Õ', "Ó")
+        .replace('è', "é")
+        .replace('È', "É")
+        .replace('ì', "í")
+        .replace('Ì', "Í")
+        .replace('ù', "ú")
+        .replace('Ù', "Ú")
+}
+
+#[cfg(not(target_os = "windows"))]
+fn fix_ocr_spanish_accents(s: String) -> String {
+    s
+}
+
 #[tauri::command]
 async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String, String> {
     #[cfg(target_os = "macos")]
@@ -1359,10 +1381,11 @@ try {
     $bmp.Save($env:OCR_IMG_PATH, [System.Drawing.Imaging.ImageFormat]::Png)
     $bmp.Dispose()
 
-    # 2. Perform OCR
+    # 2. Perform OCR (load WinRT types)
     $null = [Windows.Media.Ocr.OcrEngine,             Windows.Foundation, ContentType=WindowsRuntime]
     $null = [Windows.Graphics.Imaging.BitmapDecoder,  Windows.Graphics,   ContentType=WindowsRuntime]
     $null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics,   ContentType=WindowsRuntime]
+    $null = [Windows.Globalization.Language,          Windows.Globalization, ContentType=WindowsRuntime]
 
     $asTaskGM = [System.WindowsRuntimeSystemExtensions].GetMethods() |
         Where-Object { $_.Name -eq 'AsTask' -and $_.IsGenericMethodDefinition -and $_.GetParameters().Count -eq 1 } |
@@ -1379,12 +1402,26 @@ try {
     $fileStream.Dispose()
     Remove-Item $env:OCR_IMG_PATH -ErrorAction SilentlyContinue
 
-    $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+    # Prefer Spanish so OCR preserves accents (á, é, í, ó, ú, ñ)
+    $engine = $null
+    try {
+        $langEs = [Windows.Globalization.Language]::new('es-ES')
+        $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($langEs)
+    } catch { }
     if ($null -eq $engine) {
-        $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage((New-Object Windows.Globalization.Language('es-ES')))
+        try {
+            $langMx = [Windows.Globalization.Language]::new('es-MX')
+            $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($langMx)
+        } catch { }
     }
     if ($null -eq $engine) {
-        $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage((New-Object Windows.Globalization.Language('en-US')))
+        $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+    }
+    if ($null -eq $engine) {
+        try {
+            $langEn = [Windows.Globalization.Language]::new('en-US')
+            $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($langEn)
+        } catch { }
     }
 
     $result = Await ($engine.RecognizeAsync($softBmp)) ([Windows.Media.Ocr.OcrResult])
@@ -1455,10 +1492,13 @@ try {
                         }
                     ))
                 } else if stdout.starts_with("B64:") {
-                    let b64_part = &stdout[4..];
+                    let b64_part = stdout[4..].trim();
                     use base64::{engine::general_purpose, Engine as _};
                     match general_purpose::STANDARD.decode(b64_part) {
-                        Ok(bytes) => Ok(String::from_utf8_lossy(&bytes).to_string()),
+                        Ok(bytes) => {
+                            let text = String::from_utf8_lossy(&bytes).to_string();
+                            Ok(fix_ocr_spanish_accents(text))
+                        }
                         Err(_) => Ok(stdout), // fallback
                     }
                 } else {
