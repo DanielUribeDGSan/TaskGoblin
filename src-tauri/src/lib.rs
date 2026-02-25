@@ -1309,18 +1309,24 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
         // Wait for the user to select a region (or cancel)
         let region = rx.await.ok().flatten();
 
-        if was_visible {
-            let _ = window.unminimize();
-            let _ = window.show();
-            let _ = window.set_focus();
-        }
-
         let (sx, sy, sw, sh) = match region {
             Some(r) => r,
-            None => return Ok("".to_string()), // user cancelled
+            None => {
+                if was_visible {
+                    let _ = window.unminimize();
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+                return Ok("".to_string());
+            }
         };
 
         if sw <= 0 || sh <= 0 {
+            if was_visible {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
             return Ok("".to_string());
         }
 
@@ -1403,6 +1409,13 @@ if ($result -and $result.Lines) {
             e.to_string()
         })?;
 
+        // Restore window AFTER capture is done to avoid obstruction
+        if was_visible {
+            let _ = window.unminimize();
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+
         match ocr_res {
             Ok(out) => {
                 let text_out = String::from_utf8_lossy(&out.stdout).trim().to_string();
@@ -1480,32 +1493,12 @@ async fn write_to_clipboard(text: String) -> Result<(), String> {
     }
     #[cfg(target_os = "windows")]
     {
-        use std::io::Write;
-        use std::process::{Command, Stdio};
-        // Pipe text into PowerShell's [Console]::In + Set-Clipboard via stdin to support Unicode
-        let ps_clip = "$text = [Console]::In.ReadToEnd(); Set-Clipboard -Value $text";
-        let mut child = Command::new("powershell")
-            .arg("-NoProfile")
-            .arg("-NonInteractive")
-            .arg("-Command")
-            .arg(ps_clip)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| format!("Failed to start powershell for clipboard: {}", e))?;
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(text.as_bytes())
-                .map_err(|e| format!("Failed to write clipboard text: {}", e))?;
-        }
-        let output = child
-            .wait_with_output()
-            .map_err(|e| format!("Failed to wait for powershell: {}", e))?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("PowerShell clipboard failed: {}", stderr));
-        }
+        use arboard::Clipboard;
+        let mut clipboard =
+            Clipboard::new().map_err(|e| format!("Failed to access clipboard: {}", e))?;
+        clipboard
+            .set_text(text)
+            .map_err(|e| format!("Failed to set clipboard text: {}", e))?;
         Ok(())
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
