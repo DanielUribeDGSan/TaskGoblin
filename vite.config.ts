@@ -12,7 +12,8 @@ export default defineConfig(async () => ({
     rollupOptions: {
       input: {
         main: 'index.html',
-        island: 'island.html'
+        island: 'island.html',
+        capture: 'capture.html',
       }
     }
   },

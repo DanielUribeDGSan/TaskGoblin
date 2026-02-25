@@ -15,6 +15,9 @@ struct AppState {
     is_paint_mode: std::sync::Mutex<bool>,
     is_dialog_open: std::sync::Mutex<bool>,
     is_capturing: Arc<std::sync::Mutex<bool>>, // Arc so it can be cloned into threads
+    // Sends capture region (x,y,w,h) or None (cancel) back from the Tauri overlay window
+    capture_tx:
+        tokio::sync::Mutex<Option<tokio::sync::oneshot::Sender<Option<(i32, i32, i32, i32)>>>>,
     shutdown_cancel_tx: tokio::sync::Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
     shutdown_target: tokio::sync::Mutex<Option<u64>>,
     shutdown_duration: tokio::sync::Mutex<Option<u64>>,
@@ -1266,100 +1269,93 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
         use std::fs;
         use std::process::Command;
 
+        let app_handle = window.app_handle().clone();
         let was_visible = window.is_visible().unwrap_or(false);
-        // On Windows: minimize (not hide) so the app stays in the taskbar
+
+        // Minimize the sidebar so it's not in the screenshot
         if was_visible {
             let _ = window.minimize();
-            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        }
+
+        // Create a oneshot channel; store the sender in AppState
+        let (tx, rx) = tokio::sync::oneshot::channel::<Option<(i32, i32, i32, i32)>>();
+        {
+            let state = app_handle.state::<AppState>();
+            let mut lock = state.capture_tx.lock().await;
+            *lock = Some(tx);
+        }
+
+        // Open the Tauri transparent fullscreen overlay window (capture.html)
+        // This is instant — no console window, no PowerShell needed for the UI
+        if let Some(existing) = app_handle.get_webview_window("capture") {
+            let _ = existing.close();
+        }
+        let _cap_win = tauri::WebviewWindowBuilder::new(
+            &app_handle,
+            "capture",
+            tauri::WebviewUrl::App("capture.html".into()),
+        )
+        .fullscreen(true)
+        .transparent(true)
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .shadow(false)
+        .resizable(false)
+        .build()
+        .map_err(|e| format!("Failed to open capture window: {}", e))?;
+
+        // Wait for the user to select a region (or cancel)
+        let region = rx.await.ok().flatten();
+
+        // Restore sidebar window
+        if was_visible {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+
+        let (sx, sy, sw, sh) = match region {
+            Some(r) => r,
+            None => return Ok("".to_string()), // user cancelled
+        };
+
+        if sw <= 0 || sh <= 0 {
+            return Ok("".to_string());
         }
 
         let temp_image_path = std::env::temp_dir().join("mouse_crazy_ocr_capture.png");
         let temp_image_str = temp_image_path.to_string_lossy().to_string();
 
-        // Capture script: WinForms overlay for region selection.
-        // Uses -STA so Windows Forms runs on the correct apartment thread.
+        // Tiny PowerShell script — only System.Drawing, NO WinForms UI, runs instantly hidden
         let ps_capture = r#"
 $ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
-
-$outPath = $env:OCR_IMG_PATH
-$screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-$bitmap = New-Object System.Drawing.Bitmap($screen.Width, $screen.Height)
-$gfx = [System.Drawing.Graphics]::FromImage($bitmap)
-$gfx.CopyFromScreen($screen.Location, [System.Drawing.Point]::Empty, $screen.Size)
-
-$form = New-Object System.Windows.Forms.Form
-$form.FormBorderStyle = 'None'
-$form.WindowState = 'Maximized'
-$form.BackColor = [System.Drawing.Color]::Black
-$form.Opacity = 0.4
-$form.TopMost = $true
-$form.ShowInTaskbar = $false
-$form.Cursor = [System.Windows.Forms.Cursors]::Cross
-
-$script:startPoint = [System.Drawing.Point]::Empty
-$script:selRect   = [System.Drawing.Rectangle]::Empty
-$script:drawing   = $false
-
-$form.Add_MouseDown({
-    $script:startPoint = $form.PointToClient([System.Windows.Forms.Cursor]::Position)
-    $script:drawing = $true
-})
-
-$form.Add_MouseMove({
-    if ($script:drawing) {
-        $cur = $form.PointToClient([System.Windows.Forms.Cursor]::Position)
-        $x = [Math]::Min($script:startPoint.X, $cur.X)
-        $y = [Math]::Min($script:startPoint.Y, $cur.Y)
-        $w = [Math]::Abs($cur.X - $script:startPoint.X)
-        $h = [Math]::Abs($cur.Y - $script:startPoint.Y)
-        $script:selRect = New-Object System.Drawing.Rectangle($x, $y, $w, $h)
-        $form.Refresh()
-    }
-})
-
-$form.Add_Paint({
-    if ($script:drawing -and $script:selRect.Width -gt 0) {
-        $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::White, 2)
-        $_.Graphics.DrawRectangle($pen, $script:selRect)
-    }
-})
-
-$form.Add_MouseUp({
-    $script:drawing = $false
-    $form.Close()
-})
-
-$form.Add_KeyDown({
-    if ($_.KeyCode -eq 'Escape') { $script:selRect = [System.Drawing.Rectangle]::Empty; $form.Close() }
-})
-
-[System.Windows.Forms.Application]::EnableVisualStyles()
-$form.ShowDialog() | Out-Null
-
-if ($script:selRect.Width -gt 2 -and $script:selRect.Height -gt 2) {
-    $cropped = $bitmap.Clone($script:selRect, $bitmap.PixelFormat)
-    $cropped.Save($outPath, [System.Drawing.Imaging.ImageFormat]::Png)
-    Write-Output 'CAPTURED'
-} else {
-    Write-Output 'CANCELLED'
-}
+$x=[int]$env:CAP_X; $y=[int]$env:CAP_Y; $w=[int]$env:CAP_W; $h=[int]$env:CAP_H
+$bmp = New-Object System.Drawing.Bitmap($w, $h)
+$g   = [System.Drawing.Graphics]::FromImage($bmp)
+$g.CopyFromScreen($x, $y, 0, 0, (New-Object System.Drawing.Size($w, $h)))
+$g.Dispose()
+$bmp.Save($env:OCR_IMG_PATH, [System.Drawing.Imaging.ImageFormat]::Png)
+$bmp.Dispose()
+Write-Output 'CAPTURED'
 "#;
 
-        let img_path_for_env = temp_image_str.clone();
+        let img_out = temp_image_str.clone();
         let capture_res = tauri::async_runtime::spawn_blocking(move || {
             #[allow(unused_mut)]
             let mut cmd = Command::new("powershell");
-            // -STA: Single-Threaded Apartment — required for WinForms to work correctly
             cmd.arg("-NoProfile")
-                .arg("-STA")
                 .arg("-NonInteractive")
                 .arg("-WindowStyle")
                 .arg("Hidden")
                 .arg("-Command")
                 .arg(ps_capture)
-                .env("OCR_IMG_PATH", &img_path_for_env);
+                .env("CAP_X", sx.to_string())
+                .env("CAP_Y", sy.to_string())
+                .env("CAP_W", sw.to_string())
+                .env("CAP_H", sh.to_string())
+                .env("OCR_IMG_PATH", &img_out);
             #[cfg(target_os = "windows")]
             {
                 use std::os::windows::process::CommandExt;
@@ -1370,30 +1366,20 @@ if ($script:selRect.Width -gt 2 -and $script:selRect.Height -gt 2) {
         .await
         .map_err(|e| e.to_string())?;
 
-        // Restore window after capture overlay closes
-        if was_visible {
-            let _ = window.show();
-            let _ = window.set_focus();
+        match capture_res {
+            Err(e) => return Err(format!("Screenshot failed: {}", e)),
+            Ok(out) if !out.status.success() => {
+                let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+                return Err(format!("Screenshot error: {}", stderr));
+            }
+            _ => {}
         }
 
-        let capture_output = capture_res.map_err(|e| format!("Failed to launch capture: {}", e))?;
-        let stdout = String::from_utf8_lossy(&capture_output.stdout)
-            .trim()
-            .to_string();
-
-        if stdout.contains("CANCELLED") || !temp_image_path.exists() {
-            return Ok("".to_string());
+        if !temp_image_path.exists() {
+            return Err("Screenshot file was not created".to_string());
         }
 
-        if !capture_output.status.success() && !temp_image_path.exists() {
-            let stderr = String::from_utf8_lossy(&capture_output.stderr)
-                .trim()
-                .to_string();
-            return Err(format!("Screen capture failed: {}", stderr));
-        }
-
-        // OCR script: uses System.IO.File + AsRandomAccessStream (avoids StorageFile WinRT access restrictions)
-        // GetAwaiter().GetResult() used instead of Wait(-1) for proper exception unwrapping.
+        // OCR script: System.IO streams (avoids WinRT StorageFile restrictions)
         let ps_ocr = r#"
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
@@ -1405,16 +1391,15 @@ $asTaskGM = [System.WindowsRuntimeSystemExtensions].GetMethods() |
     Where-Object { $_.Name -eq 'AsTask' -and $_.IsGenericMethodDefinition -and $_.GetParameters().Count -eq 1 } |
     Select-Object -First 1
 
-function Await {
-    param($op, $type)
+function Await { param($op, $type)
     $asTaskGM.MakeGenericMethod($type).Invoke($null, @($op)).GetAwaiter().GetResult()
 }
 
-# Read file via System.IO (avoids WinRT StorageFile access restrictions)
 $fileStream = [System.IO.File]::OpenRead($env:OCR_IMG_PATH)
 $ras        = [System.IO.WindowsRuntimeStreamExtensions]::AsRandomAccessStream($fileStream)
 $decoder    = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($ras)) ([Windows.Graphics.Imaging.BitmapDecoder])
 $bmp        = Await ($decoder.GetSoftwareBitmapAsync())                            ([Windows.Graphics.Imaging.SoftwareBitmap])
+$fileStream.Dispose()
 
 $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
 if ($null -eq $engine) {
@@ -1422,27 +1407,24 @@ if ($null -eq $engine) {
 }
 
 $result = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])
-$text   = ($result.Lines | ForEach-Object { $_.Text }) -join "`n"
-$fileStream.Dispose()
-Write-Output $text
+($result.Lines | ForEach-Object { $_.Text }) -join "`n"
 "#;
 
-        let img_path_for_ocr = temp_image_str.clone();
+        let img_for_ocr = temp_image_str.clone();
         let ocr_res = tauri::async_runtime::spawn_blocking(move || {
             #[allow(unused_mut)]
             let mut cmd = Command::new("powershell");
             cmd.arg("-NoProfile")
-                .arg("-STA")
                 .arg("-NonInteractive")
                 .arg("-WindowStyle")
                 .arg("Hidden")
                 .arg("-Command")
                 .arg(ps_ocr)
-                .env("OCR_IMG_PATH", &img_path_for_ocr);
+                .env("OCR_IMG_PATH", &img_for_ocr);
             #[cfg(target_os = "windows")]
             {
                 use std::os::windows::process::CommandExt;
-                cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+                cmd.creation_flags(0x08000000);
             }
             cmd.output()
         })
@@ -1468,7 +1450,7 @@ Write-Output $text
                     Ok(text_out)
                 }
             }
-            Err(e) => Err(format!("Failed to run OCR script: {}", e)),
+            Err(e) => Err(format!("Failed to run OCR: {}", e)),
         }
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -1797,6 +1779,48 @@ try {
     Err("PDF conversion not supported on this OS".to_string())
 }
 
+/// Called by the Tauri capture overlay (capture.tsx) when the user releases the mouse.
+/// Closes the overlay window and unblocks extract_text_from_screen with the selected region.
+#[tauri::command]
+async fn finalize_capture(
+    app_handle: tauri::AppHandle,
+    state: State<'_, AppState>,
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+) -> Result<(), String> {
+    // Close the overlay window first so it doesn't appear in the screenshot
+    if let Some(win) = app_handle.get_webview_window("capture") {
+        let _ = win.close();
+    }
+    // Small delay so the window is fully gone before we capture
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    // Unblock the waiting OCR task
+    let mut tx_lock = state.capture_tx.lock().await;
+    if let Some(tx) = tx_lock.take() {
+        let _ = tx.send(Some((x, y, w, h)));
+    }
+    Ok(())
+}
+
+/// Called by the Tauri capture overlay when the user presses Escape.
+#[tauri::command]
+async fn cancel_capture(
+    app_handle: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    if let Some(win) = app_handle.get_webview_window("capture") {
+        let _ = win.close();
+    }
+    let mut tx_lock = state.capture_tx.lock().await;
+    if let Some(tx) = tx_lock.take() {
+        let _ = tx.send(None); // None = cancelled
+    }
+    Ok(())
+}
+
 #[tauri::command]
 async fn process_screenshot_ocr(window: tauri::WebviewWindow) -> Result<(), String> {
     let app_handle = window.app_handle().clone();
@@ -1947,7 +1971,9 @@ pub fn run() {
             convert_pdf_to_word,
             set_dialog_open,
             process_image,
-            test_toast
+            test_toast,
+            finalize_capture,
+            cancel_capture
         ])
         .setup(|app| {
             app.manage(AppState {
@@ -1956,6 +1982,7 @@ pub fn run() {
                 is_paint_mode: std::sync::Mutex::new(false),
                 is_dialog_open: std::sync::Mutex::new(false),
                 is_capturing: Arc::new(std::sync::Mutex::new(false)),
+                capture_tx: tokio::sync::Mutex::new(None),
                 shutdown_cancel_tx: tokio::sync::Mutex::new(None),
                 shutdown_target: tokio::sync::Mutex::new(None),
                 shutdown_duration: tokio::sync::Mutex::new(None),
