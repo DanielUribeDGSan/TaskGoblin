@@ -1325,44 +1325,51 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
         }
 
         let combined_ps = r#"
-$ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName System.Drawing
-Add-Type -AssemblyName System.Runtime.WindowsRuntime
-$null = [Windows.Media.Ocr.OcrEngine,             Windows.Foundation, ContentType=WindowsRuntime]
-$null = [Windows.Graphics.Imaging.BitmapDecoder,  Windows.Graphics,   ContentType=WindowsRuntime]
-$null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics,   ContentType=WindowsRuntime]
+try {
+    $ErrorActionPreference = 'Stop'
+    Add-Type -AssemblyName System.Drawing
+    Add-Type -AssemblyName System.Runtime.WindowsRuntime
+    $null = [Windows.Media.Ocr.OcrEngine,             Windows.Foundation, ContentType=WindowsRuntime]
+    $null = [Windows.Graphics.Imaging.BitmapDecoder,  Windows.Graphics,   ContentType=WindowsRuntime]
+    $null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics,   ContentType=WindowsRuntime]
 
-$asTaskGM = [System.WindowsRuntimeSystemExtensions].GetMethods() |
-    Where-Object { $_.Name -eq 'AsTask' -and $_.IsGenericMethodDefinition -and $_.GetParameters().Count -eq 1 } |
-    Select-Object -First 1
+    $asTaskGM = [System.WindowsRuntimeSystemExtensions].GetMethods() |
+        Where-Object { $_.Name -eq 'AsTask' -and $_.IsGenericMethodDefinition -and $_.GetParameters().Count -eq 1 } |
+        Select-Object -First 1
 
-function Await { param($op, $type)
-    $asTaskGM.MakeGenericMethod($type).Invoke($null, @($op)).GetAwaiter().GetResult()
+    function Await { param($op, $type)
+        $asTaskGM.MakeGenericMethod($type).Invoke($null, @($op)).GetAwaiter().GetResult()
+    }
+
+    $x=[int]$env:CAP_X; $y=[int]$env:CAP_Y; $w=[int]$env:CAP_W; $h=[int]$env:CAP_H
+    $bmp = New-Object System.Drawing.Bitmap($w, $h)
+    $g   = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.CopyFromScreen($x, $y, 0, 0, (New-Object System.Drawing.Size($w, $h)))
+    $g.Dispose()
+
+    $tempPath = [System.IO.Path]::GetTempFileName() + ".png"
+    $bmp.Save($tempPath, [System.Drawing.Imaging.ImageFormat]::Png)
+    $bmp.Dispose()
+
+    $fileStream = [System.IO.File]::OpenRead($tempPath)
+    $ras        = [System.IO.WindowsRuntimeStreamExtensions]::AsRandomAccessStream($fileStream)
+    $decoder    = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($ras)) ([Windows.Graphics.Imaging.BitmapDecoder])
+    $softBmp    = Await ($decoder.GetSoftwareBitmapAsync())                            ([Windows.Graphics.Imaging.SoftwareBitmap])
+    $fileStream.Dispose()
+    Remove-Item $tempPath -ErrorAction SilentlyContinue
+
+    $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+    if ($null -eq $engine) {
+        $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage((New-Object Windows.Globalization.Language('en-US')))
+    }
+
+    $result = Await ($engine.RecognizeAsync($softBmp)) ([Windows.Media.Ocr.OcrResult])
+    $text = ($result.Lines | ForEach-Object { $_.Text }) -join "`n"
+    Write-Output $text
+} catch {
+    Write-Error $_.Exception.Message
+    exit 1
 }
-
-$x=[int]$env:CAP_X; $y=[int]$env:CAP_Y; $w=[int]$env:CAP_W; $h=[int]$env:CAP_H
-$bmp = New-Object System.Drawing.Bitmap($w, $h)
-$g   = [System.Drawing.Graphics]::FromImage($bmp)
-$g.CopyFromScreen($x, $y, 0, 0, (New-Object System.Drawing.Size($w, $h)))
-$g.Dispose()
-
-$ms = New-Object System.IO.MemoryStream
-$bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
-$bmp.Dispose()
-$ms.Position = 0
-$ras = [System.IO.WindowsRuntimeStreamExtensions]::AsRandomAccessStream($ms)
-
-$decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($ras)) ([Windows.Graphics.Imaging.BitmapDecoder])
-$softBmp = Await ($decoder.GetSoftwareBitmapAsync())                            ([Windows.Graphics.Imaging.SoftwareBitmap])
-$ms.Dispose()
-
-$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
-if ($null -eq $engine) {
-    $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage((New-Object Windows.Globalization.Language('en-US')))
-}
-
-$result = Await ($engine.RecognizeAsync($softBmp)) ([Windows.Media.Ocr.OcrResult])
-($result.Lines | ForEach-Object { $_.Text }) -join "`n"
 "#;
 
         let ocr_res = tauri::async_runtime::spawn_blocking(move || {
@@ -1398,13 +1405,15 @@ $result = Await ($engine.RecognizeAsync($softBmp)) ([Windows.Media.Ocr.OcrResult
             Ok(out) => {
                 let text_out = String::from_utf8_lossy(&out.stdout).trim().to_string();
                 let err_out = String::from_utf8_lossy(&out.stderr).trim().to_string();
-                if !out.status.success() {
+
+                // If the process failed or there's stderr output, report it as error
+                if !out.status.success() || !err_out.is_empty() {
                     Err(format!(
                         "OCR error: {}",
                         if !err_out.is_empty() {
                             err_out
                         } else {
-                            text_out
+                            "Unknown PowerShell error".to_string()
                         }
                     ))
                 } else {
