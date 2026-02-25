@@ -1126,9 +1126,9 @@ $null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Graphics, ContentType=W
 function Await {
     param($WinRtTask, $ResultType)
     $methods = [System.WindowsRuntimeSystemExtensions].GetMethods()
-    $asTask  = $methods | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 } | Select-Object -First 1
+    $asTask  = $methods | Where-Object { $_.Name -eq 'AsTask' -and $_.IsGenericMethodDefinition -and $_.GetParameters().Count -eq 1 } | Select-Object -First 1
     $netTask = $asTask.MakeGenericMethod($ResultType).Invoke($null, @($WinRtTask))
-    $netTask.Wait() | Out-Null
+    $netTask.Wait(-1) | Out-Null
     $netTask.Result
 }
 
