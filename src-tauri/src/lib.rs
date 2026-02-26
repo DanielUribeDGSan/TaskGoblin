@@ -238,6 +238,11 @@ fn request_accessibility() -> Result<(), String> {
 }
 
 #[tauri::command]
+fn start_window_drag(window: tauri::Window) {
+    let _ = window.start_dragging();
+}
+
+#[tauri::command]
 fn set_ignore_cursor_events(window: tauri::Window, ignore: bool) -> Result<(), String> {
     let _ = window.set_ignore_cursor_events(ignore);
     Ok(())
@@ -2044,6 +2049,8 @@ pub fn run() {
             open_accessibility_settings,
             check_accessibility,
             request_accessibility,
+            start_window_drag,
+            repair_permissions,
             toggle_pet_mode,
             toggle_paint_mode,
             set_ignore_cursor_events,

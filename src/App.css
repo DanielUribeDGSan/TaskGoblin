@@ -90,8 +90,8 @@ body {
   pointer-events: none;
   /* Let clicks pass through to paint UI or others */
   z-index: 1;
-  padding-top: 10px;
-  padding-right: 15px;
+  padding: 0;
+  /* No more padding, window fits card */
 }
 
 .app-root.full-screen {
@@ -101,11 +101,43 @@ body {
   justify-content: flex-end;
 }
 
-/* Base App Wrapper - The "Card" design */
+
+
+.internal-drag-handle {
+  position: absolute;
+  pointer-events: auto !important;
+  z-index: 1001;
+  /* Above sidebar content but behind buttons if needed */
+  background: transparent;
+}
+
+.internal-drag-handle.top {
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 40px;
+  /* Header area */
+}
+
+.internal-drag-handle.left {
+  top: 40px;
+  left: 0;
+  width: 15px;
+  height: calc(100% - 40px);
+}
+
+.internal-drag-handle.right {
+  top: 40px;
+  right: 0;
+  width: 15px;
+  height: calc(100% - 40px);
+}
+
 .app-wrapper {
   position: relative;
-  width: 360px;
-  height: 580px;
+  width: 100%;
+  /* Take full window size now */
+  height: 100%;
   background: var(--bg-gradient);
   display: flex;
   flex-direction: column;
@@ -825,6 +857,7 @@ body.dark ::-webkit-calendar-picker-indicator {
 }
 
 /* 3D Cat Visuals (Mascota 2.0) */
+
 .pet-3d-container {
   position: absolute;
   pointer-events: none;

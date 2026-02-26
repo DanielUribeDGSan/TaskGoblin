@@ -605,195 +605,208 @@ function App() {
     }
   };
 
+  const handleDrag = async () => {
+    try {
+      console.log("Internal drag initiated");
+      await invoke('start_window_drag');
+    } catch (err) {
+      console.error("Failed to start dragging:", err);
+    }
+  };
+
   return (
-    <div className={`app-root ${(isPetMode || isPaintActive) ? 'full-screen' : ''}`}>
-      {isPaintActive && (
-        <PaintBoard
-          onClose={() => togglePaintMode(false)}
-          t={t}
-        />
-      )}
-      <div
-        className={`app-wrapper ${!isSidebarOpen ? 'sidebar-closed' : ''} ${isPetMode ? 'pet-mode-active' : ''} ${isPaintActive ? 'paint-mode-active' : ''}`}
-      >
-        {isPetMode && !isSidebarOpen && (
-          <button
-            className="floating-restore-btn"
-            onClick={() => {
-              console.log("Restore button clicked");
-              togglePetMode();
-            }}
-            title="Desactivar Gato y Abrir App"
-            style={{ zIndex: 10000, pointerEvents: 'auto' }}
-          >
-            <img src="/icon/TaskGoblin.png" alt="TaskGoblin" style={{ width: '28px', height: '28px', borderRadius: '6px' }} />
-          </button>
+    <>
+      <div className={`app-root ${(isPetMode || isPaintActive) ? 'full-screen' : ''}`}>
+        <div className="internal-drag-handle top" onMouseDown={handleDrag} data-tauri-drag-region></div>
+        <div className="internal-drag-handle left" onMouseDown={handleDrag} data-tauri-drag-region></div>
+        <div className="internal-drag-handle right" onMouseDown={handleDrag} data-tauri-drag-region></div>
+        {isPaintActive && (
+          <PaintBoard
+            onClose={() => togglePaintMode(false)}
+            t={t}
+          />
         )}
+        <div
+          className={`app-wrapper ${!isSidebarOpen ? 'sidebar-closed' : ''} ${isPetMode ? 'pet-mode-active' : ''} ${isPaintActive ? 'paint-mode-active' : ''}`}
+        >
+          {isPetMode && !isSidebarOpen && (
+            <button
+              className="floating-restore-btn"
+              onClick={() => {
+                console.log("Restore button clicked");
+                togglePetMode();
+              }}
+              title="Desactivar Gato y Abrir App"
+              style={{ zIndex: 10000, pointerEvents: 'auto' }}
+            >
+              <img src="/icon/TaskGoblin.png" alt="TaskGoblin" style={{ width: '28px', height: '28px', borderRadius: '6px' }} />
+            </button>
+          )}
 
 
 
-        <div className={`sidebar-content ${isPaintActive ? 'hide-for-paint' : ''}`} data-tauri-drag-region>
-          {closeAppsConfirm && (
-            <div className="confirm-overlay" onClick={() => setCloseAppsConfirm(null)}>
-              <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
-                <p className="confirm-message">
-                  {closeAppsConfirm === "all" && t('shutdown.confirm_all')}
-                  {closeAppsConfirm === "leisure" && t('shutdown.confirm_leisure')}
-                  {closeAppsConfirm === "heavy" && t('shutdown.confirm_heavy')}
-                </p>
-                <div className="confirm-actions">
-                  <button type="button" className="confirm-btn confirm-btn-cancel" onClick={() => setCloseAppsConfirm(null)}>
-                    {t('common.cancel')}
-                  </button>
-                  <button type="button" className="confirm-btn confirm-btn-yes" onClick={handleCloseApps}>
-                    {t('common.yes')}
-                  </button>
+          <div className={`sidebar-content ${isPaintActive ? 'hide-for-paint' : ''}`} data-tauri-drag-region>
+            {closeAppsConfirm && (
+              <div className="confirm-overlay" onClick={() => setCloseAppsConfirm(null)}>
+                <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+                  <p className="confirm-message">
+                    {closeAppsConfirm === "all" && t('shutdown.confirm_all')}
+                    {closeAppsConfirm === "leisure" && t('shutdown.confirm_leisure')}
+                    {closeAppsConfirm === "heavy" && t('shutdown.confirm_heavy')}
+                  </p>
+                  <div className="confirm-actions">
+                    <button type="button" className="confirm-btn confirm-btn-cancel" onClick={() => setCloseAppsConfirm(null)}>
+                      {t('common.cancel')}
+                    </button>
+                    <button type="button" className="confirm-btn confirm-btn-yes" onClick={handleCloseApps}>
+                      {t('common.yes')}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-          {/* The schedule shutdown confirm modal was removed to avoid conflicting with the inline input field. */}
-          <div className="sidebar-header" data-tauri-drag-region>
-            <motion.div
-              className="logo-section"
-              onClick={() => setActiveTab("Main")}
-              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}
-              data-tauri-drag-region
-              initial={{ x: -20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ type: "spring", stiffness: 300, damping: 20 }}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <motion.img
-                src="/icon/TaskGoblin.png"
-                alt="TaskGoblin"
-                className="app-logo"
-                data-tauri-drag-region
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: [0, -5, 0], opacity: 1 }}
-                transition={{
-                  y: { repeat: Infinity, duration: 3, ease: "easeInOut" },
-                  opacity: { duration: 0.5 }
-                }}
-              />
-              <div style={{ display: 'flex', flexDirection: 'column' }} data-tauri-drag-region>
-                <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }} data-tauri-drag-region>TaskGoblin</h1>
-                <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }} data-tauri-drag-region>{t('sidebar.by_daniel')}</span>
-              </div>
-            </motion.div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button className="theme-toggle-btn" onClick={() => setLanguage(language === 'en' ? 'es' : 'en')} title={language === 'en' ? 'Cambiar a Español' : 'Switch to English'}>
-                <span style={{ fontSize: '10px', fontWeight: 'bold' }}>{language === 'en' ? 'ES' : 'EN'}</span>
-              </button>
-              <button className="theme-toggle-btn" onClick={() => setIsDarkMode(!isDarkMode)}>
-                {isDarkMode ? <LightModeIcon /> : <DarkModeIcon />}
-              </button>
-              <button
-                className="theme-toggle-btn"
-                onClick={() => {
-                  setIsSidebarOpen(false);
-                  setTimeout(async () => {
-                    try {
-                      await invoke('hide_window');
-                    } catch (e) {
-                      console.error("Failed to hide window", e);
-                    }
-                  }, 600);
-                }}
-                title="Close Sidebar"
-              >
-                <span style={{ fontSize: '18px' }}>×</span>
-              </button>
-            </div>
-          </div>
-
-          <AnimatePresence mode="wait">
-            {activeTab === "Main" && (
+            )}
+            {/* The schedule shutdown confirm modal was removed to avoid conflicting with the inline input field. */}
+            <div className="sidebar-header" data-tauri-drag-region>
               <motion.div
-                key="search-main"
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                style={{ padding: '0 16px', marginTop: '4px', marginBottom: '16px' }}
+                className="logo-section"
+                onClick={() => setActiveTab("Main")}
+                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}
                 data-tauri-drag-region
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '10px 14px', gap: '8px' }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                  <input type="text" placeholder={t('common.search')} style={{ border: 'none', background: 'transparent', padding: 0, margin: 0, outline: 'none', width: '100%', fontSize: '14px', color: 'var(--text-primary)', boxShadow: 'none' }} value={appSearchTerm} onChange={(e) => setAppSearchTerm(e.target.value)} className="no-focus-input" />
+                <motion.img
+                  src="/icon/TaskGoblin.png"
+                  alt="TaskGoblin"
+                  className="app-logo"
+                  data-tauri-drag-region
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: [0, -5, 0], opacity: 1 }}
+                  transition={{
+                    y: { repeat: Infinity, duration: 3, ease: "easeInOut" },
+                    opacity: { duration: 0.5 }
+                  }}
+                />
+                <div style={{ display: 'flex', flexDirection: 'column' }} data-tauri-drag-region>
+                  <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }} data-tauri-drag-region>TaskGoblin</h1>
+                  <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }} data-tauri-drag-region>{t('sidebar.by_daniel')}</span>
                 </div>
               </motion.div>
-            )}
-          </AnimatePresence>
-
-          <div className="content-area" data-tauri-drag-region ref={scrollContainerRef}>
-            <AnimatePresence mode="wait">
-              {activeTab === "Pet" && (
-                <motion.div
-                  key="pet-tab"
-                  className="wa-form-container"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 25 }}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button className="theme-toggle-btn" onClick={() => setLanguage(language === 'en' ? 'es' : 'en')} title={language === 'en' ? 'Cambiar a Español' : 'Switch to English'}>
+                  <span style={{ fontSize: '10px', fontWeight: 'bold' }}>{language === 'en' ? 'ES' : 'EN'}</span>
+                </button>
+                <button className="theme-toggle-btn" onClick={() => setIsDarkMode(!isDarkMode)}>
+                  {isDarkMode ? <LightModeIcon /> : <DarkModeIcon />}
+                </button>
+                <button
+                  className="theme-toggle-btn"
+                  onClick={() => {
+                    setIsSidebarOpen(false);
+                    setTimeout(async () => {
+                      try {
+                        await invoke('hide_window');
+                      } catch (e) {
+                        console.error("Failed to hide window", e);
+                      }
+                    }, 600);
+                  }}
+                  title="Close Sidebar"
                 >
-                  <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
-                    <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> {t('common.back')}
-                  </div>
-                  <h2 style={{ fontSize: '18px', marginBottom: '8px' }}>{t('pet.title')}</h2>
-                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
-                    {t('pet.desc')}
-                  </p>
+                  <span style={{ fontSize: '18px' }}>×</span>
+                </button>
+              </div>
+            </div>
 
-                  <button
-                    className={`wa-submit-btn ${isPetMode ? 'active' : ''}`}
-                    onClick={togglePetMode}
-                    style={{ padding: '12px', background: isPetMode ? '#8c7ae6' : 'rgba(255,255,255,0.05)' }}
-                  >
-                    {isPetMode ? t('pet.btn_deactivate') : t('pet.btn_activate')}
-                  </button>
-                </motion.div>
-              )}
-
+            <AnimatePresence mode="wait">
               {activeTab === "Main" && (
                 <motion.div
-                  key="main-tab"
+                  key="search-main"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  style={{ padding: '0 16px', marginTop: '4px', marginBottom: '16px' }}
                   data-tauri-drag-region
-                  style={{ flex: 1 }}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
                 >
-                  {"main".includes(appSearchTerm.toLowerCase()) && (
-                    <motion.div
-                      className="section-label"
-                      data-tauri-drag-region
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                    >
-                      {t('sidebar.main')}
-                    </motion.div>
-                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '10px 14px', gap: '8px' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    <input type="text" placeholder={t('common.search')} style={{ border: 'none', background: 'transparent', padding: 0, margin: 0, outline: 'none', width: '100%', fontSize: '14px', color: 'var(--text-primary)', boxShadow: 'none' }} value={appSearchTerm} onChange={(e) => setAppSearchTerm(e.target.value)} className="no-focus-input" />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-                  {"move mouse".includes(appSearchTerm.toLowerCase()) && (
-                    <motion.div
-                      className={`list-item ${isMouseMoving ? "active" : ""}`}
-                      onClick={handleToggleMouse}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.05 }}
-                      whileHover={{ scale: 1.02, x: 5 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <div className="icon"><MouseIcon /></div>
-                      <span>{t('tabs.move_mouse')}</span>
-                      <div className={`toggle-switch ${isMouseMoving ? "active" : ""}`}>
-                        <div className="toggle-knob"></div>
-                      </div>
-                    </motion.div>
-                  )}
+            <div className="content-area" data-tauri-drag-region ref={scrollContainerRef}>
+              <AnimatePresence mode="wait">
+                {activeTab === "Pet" && (
+                  <motion.div
+                    key="pet-tab"
+                    className="wa-form-container"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                  >
+                    <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                      <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> {t('common.back')}
+                    </div>
+                    <h2 style={{ fontSize: '18px', marginBottom: '8px' }}>{t('pet.title')}</h2>
+                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+                      {t('pet.desc')}
+                    </p>
 
-                  {/* {"cat".includes(appSearchTerm.toLowerCase()) && (
+                    <button
+                      className={`wa-submit-btn ${isPetMode ? 'active' : ''}`}
+                      onClick={togglePetMode}
+                      style={{ padding: '12px', background: isPetMode ? '#8c7ae6' : 'rgba(255,255,255,0.05)' }}
+                    >
+                      {isPetMode ? t('pet.btn_deactivate') : t('pet.btn_activate')}
+                    </button>
+                  </motion.div>
+                )}
+
+                {activeTab === "Main" && (
+                  <motion.div
+                    key="main-tab"
+                    data-tauri-drag-region
+                    style={{ flex: 1 }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    {"main".includes(appSearchTerm.toLowerCase()) && (
+                      <motion.div
+                        className="section-label"
+                        data-tauri-drag-region
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                      >
+                        {t('sidebar.main')}
+                      </motion.div>
+                    )}
+
+                    {"move mouse".includes(appSearchTerm.toLowerCase()) && (
+                      <motion.div
+                        className={`list-item ${isMouseMoving ? "active" : ""}`}
+                        onClick={handleToggleMouse}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.05 }}
+                        whileHover={{ scale: 1.02, x: 5 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <div className="icon"><MouseIcon /></div>
+                        <span>{t('tabs.move_mouse')}</span>
+                        <div className={`toggle-switch ${isMouseMoving ? "active" : ""}`}>
+                          <div className="toggle-knob"></div>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {/* {"cat".includes(appSearchTerm.toLowerCase()) && (
                   <div className={`list-item ${isPetMode ? 'active' : ''}`} onClick={togglePetMode}>
                     <div className="icon"><PetIcon /></div>
                     <span>Pet Cat</span> <span className="beta-badge">BETA</span>
@@ -803,706 +816,621 @@ function App() {
                   </div>
                 )} */}
 
-                  {"whatsapp msg".includes(appSearchTerm.toLowerCase()) && (
-                    <motion.div
-                      className="list-item"
-                      onClick={() => { setActiveTab("WhatsApp"); setAppSearchTerm(""); }}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.1 }}
-                      whileHover={{ scale: 1.02, x: 5 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <div className="icon"><MsgIcon /></div>
-                      <span>{t('tabs.whatsapp')}</span>
-                    </motion.div>
-                  )}
-
-                  {"screenshot to text".includes(appSearchTerm.toLowerCase()) && (
-                    <motion.div
-                      className="list-item"
-                      onClick={handleExtractText}
-                      title="Shortcut: Control+Alt+2"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.15 }}
-                      whileHover={{ scale: 1.02, x: 5 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <div className="icon">
-                        <div className="icon"><ScreenshotIcon /></div>
-                      </div>
-                      <span>{t('tabs.screenshot')}</span>
-                    </motion.div>
-                  )}
-
-                  {"close all apps".includes(appSearchTerm.toLowerCase()) && (
-                    <motion.div
-                      className="list-item"
-                      onClick={() => setCloseAppsConfirm("all")}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2 }}
-                      whileHover={{ scale: 1.02, x: 5 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <div className="icon">
-                        <div className="icon"><CloseIcon /></div>
-                      </div>
-                      <span>{t('tabs.close_apps')}</span>
-                    </motion.div>
-                  )}
-
-                  {"schedule shutdown".includes(appSearchTerm.toLowerCase()) && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.25 }}
-                    >
+                    {"whatsapp msg".includes(appSearchTerm.toLowerCase()) && (
                       <motion.div
                         className="list-item"
-                        onClick={() => setShowMainShutdownPicker(!showMainShutdownPicker)}
+                        onClick={() => { setActiveTab("WhatsApp"); setAppSearchTerm(""); }}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.1 }}
+                        whileHover={{ scale: 1.02, x: 5 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <div className="icon"><MsgIcon /></div>
+                        <span>{t('tabs.whatsapp')}</span>
+                      </motion.div>
+                    )}
+
+                    {"screenshot to text".includes(appSearchTerm.toLowerCase()) && (
+                      <motion.div
+                        className="list-item"
+                        onClick={handleExtractText}
+                        title="Shortcut: Control+Alt+2"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.15 }}
                         whileHover={{ scale: 1.02, x: 5 }}
                         whileTap={{ scale: 0.98 }}
                       >
                         <div className="icon">
-                          <div className="icon"><ShutdownIcon /></div>
+                          <div className="icon"><ScreenshotIcon /></div>
                         </div>
-                        <span>{t('tabs.shutdown')}</span>
+                        <span>{t('tabs.screenshot')}</span>
                       </motion.div>
+                    )}
 
+                    {"close all apps".includes(appSearchTerm.toLowerCase()) && (
+                      <motion.div
+                        className="list-item"
+                        onClick={() => setCloseAppsConfirm("all")}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.2 }}
+                        whileHover={{ scale: 1.02, x: 5 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <div className="icon">
+                          <div className="icon"><CloseIcon /></div>
+                        </div>
+                        <span>{t('tabs.close_apps')}</span>
+                      </motion.div>
+                    )}
+
+                    {"schedule shutdown".includes(appSearchTerm.toLowerCase()) && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.25 }}
+                      >
+                        <motion.div
+                          className="list-item"
+                          onClick={() => setShowMainShutdownPicker(!showMainShutdownPicker)}
+                          whileHover={{ scale: 1.02, x: 5 }}
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          <div className="icon">
+                            <div className="icon"><ShutdownIcon /></div>
+                          </div>
+                          <span>{t('tabs.shutdown')}</span>
+                        </motion.div>
+
+                        <AnimatePresence>
+                          {showMainShutdownPicker && (
+                            <motion.div
+                              className="profile-shutdown-picker"
+                              style={{ padding: '0 16px 12px 16px', marginTop: 0, borderTop: 'none', overflow: 'hidden' }}
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                <span className="profile-shutdown-label" style={{ margin: 0 }}>{t('shutdown.label_mins')}</span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowMainShutdownPicker(false);
+                                    setScheduleShutdownConfirm("");
+                                  }}
+                                  style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}
+                                  title="Close"
+                                >
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                </button>
+                              </div>
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  placeholder={t('shutdown.placeholder_mins')}
+                                  value={scheduleShutdownConfirm}
+                                  onChange={(e) => setScheduleShutdownConfirm(e.target.value)}
+                                  style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
+                                />
+                              </div>
+
+                              <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                  <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{t('shutdown.label_close_apps')}</span>
+                                  <div
+                                    onClick={() => setShouldCloseAppsOnShutdown(!shouldCloseAppsOnShutdown)}
+                                    style={{
+                                      width: '36px',
+                                      height: '20px',
+                                      background: shouldCloseAppsOnShutdown ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)',
+                                      borderRadius: '10px',
+                                      position: 'relative',
+                                      cursor: 'pointer',
+                                      transition: 'all 0.3s ease'
+                                    }}
+                                  >
+                                    <div style={{
+                                      width: '16px',
+                                      height: '16px',
+                                      background: 'white',
+                                      borderRadius: '50%',
+                                      position: 'absolute',
+                                      top: '2px',
+                                      left: shouldCloseAppsOnShutdown ? '18px' : '2px',
+                                      transition: 'all 0.3s ease',
+                                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                                    }} />
+                                  </div>
+                                </div>
+                                <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                                  {t('shutdown.desc_close_apps')}
+                                </p>
+                              </div>
+
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '12px' }}>
+                                <button
+                                  type="button"
+                                  className="profile-action-btn"
+                                  style={{ margin: 0, padding: '8px 16px', width: 'auto' }}
+                                  onClick={() => {
+                                    if (scheduleShutdownConfirm && Number.parseInt(scheduleShutdownConfirm) > 0) {
+                                      handleScheduleShutdown(Number.parseInt(scheduleShutdownConfirm) * 60);
+                                    }
+                                  }}
+                                >
+                                  {t('shutdown.btn_schedule')}
+                                </button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </motion.div>
+                    )}
+
+                    {"pdf to word".includes(appSearchTerm.toLowerCase()) && (
+                      <motion.div
+                        className="list-item"
+                        onClick={handleConvertPdf}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
+                        whileHover={{ scale: 1.02, x: 5 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <div className="icon">
+                          <div className="icon">
+                            <PdfIcon />
+                          </div>
+                        </div>
+                        <span>{t('tabs.pdf_to_word')}</span>
+                      </motion.div>
+                    )}
+
+                    {(!appSearchTerm || "color extractor".includes(appSearchTerm.toLowerCase())) && (
+                      <motion.div
+                        className="list-item"
+                        onClick={() => setActiveTab("ColorPicker")}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.35 }}
+                        whileHover={{ scale: 1.02, x: 5 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <div className="icon">
+                          <div className="icon">
+                            <ColorIcon />
+                          </div>
+                        </div>
+                        <span>{t('tabs.color_extractor')}</span>
+                      </motion.div>
+                    )}
+
+                    {(!appSearchTerm || "paint".includes(appSearchTerm.toLowerCase()) || "dibujo".includes(appSearchTerm.toLowerCase()) || "pintura".includes(appSearchTerm.toLowerCase())) && (
+                      <motion.div
+                        className="list-item"
+                        onClick={() => togglePaintMode(true)}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
+                        whileHover={{ scale: 1.02, x: 5 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <div className="icon">
+                          <div className="icon">
+                            <PaintIcon />
+                          </div>
+                        </div>
+                        <span>{t('tabs.paint')}</span>
+                      </motion.div>
+                    )}
+
+                    {(!appSearchTerm || "image converter".includes(appSearchTerm.toLowerCase()) || "gif".includes(appSearchTerm.toLowerCase())) && (
+                      <motion.div
+                        className="list-item"
+                        onClick={() => setActiveTab("ImageConverter")}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.45 }}
+                        whileHover={{ scale: 1.02, x: 5 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <div className="icon">
+                          <div className="icon">
+                            <ImageIcon />
+                          </div>
+                        </div>
+                        <span>{t('tabs.image_converter')}</span>
+                      </motion.div>
+                    )}
+
+                    {(!appSearchTerm || "profiles".includes(appSearchTerm.toLowerCase()) || "modes".includes(appSearchTerm.toLowerCase())) && (
+                      <>
+                        <div className="section-label" style={{ marginTop: '20px' }} data-tauri-drag-region>{t('sidebar.profiles')}</div>
+                        <div className="list-item" onClick={() => { setActiveTab("Profiles"); setAppSearchTerm(""); }}>
+                          <div className="icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                          </div>
+                          <span>{t('tabs.profiles')}</span>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Added a filler visual structure just to make it look like the long mockup */}
+                    {"others".includes(appSearchTerm.toLowerCase()) && <div className="section-label" style={{ marginTop: '20px' }} data-tauri-drag-region>OTHERS</div>}
+
+                    {"notifications".includes(appSearchTerm.toLowerCase()) && (
+                      <motion.div
+                        className="list-item"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.5 }}
+                        whileHover={{ scale: 1.02, x: 5 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <div className="icon">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                        </div>
+                        <span>{t('tabs.notifications')}</span>
+                      </motion.div>
+                    )}
+
+                    {"settings".includes(appSearchTerm.toLowerCase()) && (
+                      <motion.div
+                        className="list-item"
+                        onClick={() => { setActiveTab("Settings"); setAppSearchTerm(""); }}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.55 }}
+                        whileHover={{ scale: 1.02, x: 5 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <div className="icon">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                        </div>
+                        <span>{t('tabs.settings')}</span>
+                      </motion.div>
+                    )}
+
+                  </motion.div>
+                )}
+
+                {activeTab === "Profiles" && (
+                  <motion.div
+                    key="profiles-tab"
+                    className="wa-form-container profiles-container"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                  >
+                    <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                      <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Back
+                    </div>
+                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+                      {t('profiles_view.desc')}
+                    </p>
+
+                    <motion.div
+                      className="profile-mode-card"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.1 }}
+                      whileHover={{ scale: 1.01 }}
+                    >
+                      <div className="profile-mode-header">
+                        <span className="profile-mode-icon">💼</span>
+                        <span className="profile-mode-title">{t('profiles_view.work_title')}</span>
+                      </div>
+                      <div className="profile-mode-actions">
+                        <button type="button" className="profile-action-btn" onClick={() => setCloseAppsConfirm("leisure")}>
+                          {t('profiles_view.close_leisure')}
+                        </button>
+                        <button type="button" className="profile-action-btn" onClick={handleOpenFocusSettings}>
+                          {t('profiles_view.mute_notifications')}
+                        </button>
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      className="profile-mode-card"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 }}
+                      whileHover={{ scale: 1.01 }}
+                    >
+                      <div className="profile-mode-header">
+                        <span className="profile-mode-icon">🎮</span>
+                        <span className="profile-mode-title">{t('profiles_view.gaming_title')}</span>
+                      </div>
+                      <div className="profile-mode-actions">
+                        <button type="button" className="profile-action-btn" onClick={() => setCloseAppsConfirm("heavy")}>
+                          {t('profiles_view.close_heavy')}
+                        </button>
+                        <button type="button" className="profile-action-btn" onClick={handleOpenFocusSettings}>
+                          {t('profiles_view.disable_notifications')}
+                        </button>
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      className="profile-mode-card"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3 }}
+                      whileHover={{ scale: 1.01 }}
+                    >
+                      <div className="profile-mode-header">
+                        <span className="profile-mode-icon">🌙</span>
+                        <span className="profile-mode-title">{t('profiles_view.sleep_title')}</span>
+                      </div>
+                      <div className="profile-mode-actions">
+                        <button type="button" className="profile-action-btn" onClick={() => setCloseAppsConfirm("all")}>
+                          {t('profiles_view.close_everything')}
+                        </button>
+                        <button type="button" className="profile-action-btn" onClick={() => setScheduleShutdownPicker(!scheduleShutdownPicker)}>
+                          {t('profiles_view.schedule_shutdown')}
+                        </button>
+                      </div>
                       <AnimatePresence>
-                        {showMainShutdownPicker && (
+                        {scheduleShutdownPicker && (
                           <motion.div
                             className="profile-shutdown-picker"
-                            style={{ padding: '0 16px 12px 16px', marginTop: 0, borderTop: 'none', overflow: 'hidden' }}
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
+                            style={{ overflow: 'hidden' }}
                           >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                              <span className="profile-shutdown-label" style={{ margin: 0 }}>{t('shutdown.label_mins')}</span>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setShowMainShutdownPicker(false);
-                                  setScheduleShutdownConfirm("");
-                                }}
-                                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}
-                                title="Close"
-                              >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                              </button>
-                            </div>
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <span className="profile-shutdown-label" style={{ color: 'var(--text-primary)' }}>{t('shutdown.label_mins')}</span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
                               <input
                                 type="number"
                                 min="1"
-                                placeholder={t('shutdown.placeholder_mins')}
+                                placeholder="e.g. 15"
                                 value={scheduleShutdownConfirm}
                                 onChange={(e) => setScheduleShutdownConfirm(e.target.value)}
-                                style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
+                                style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
                               />
-                            </div>
-
-                            <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                                <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{t('shutdown.label_close_apps')}</span>
-                                <div
-                                  onClick={() => setShouldCloseAppsOnShutdown(!shouldCloseAppsOnShutdown)}
-                                  style={{
-                                    width: '36px',
-                                    height: '20px',
-                                    background: shouldCloseAppsOnShutdown ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)',
-                                    borderRadius: '10px',
-                                    position: 'relative',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.3s ease'
-                                  }}
-                                >
-                                  <div style={{
-                                    width: '16px',
-                                    height: '16px',
-                                    background: 'white',
-                                    borderRadius: '50%',
-                                    position: 'absolute',
-                                    top: '2px',
-                                    left: shouldCloseAppsOnShutdown ? '18px' : '2px',
-                                    transition: 'all 0.3s ease',
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                                  }} />
-                                </div>
-                              </div>
-                              <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                                {t('shutdown.desc_close_apps')}
-                              </p>
-                            </div>
-
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '12px' }}>
                               <button
                                 type="button"
                                 className="profile-action-btn"
-                                style={{ margin: 0, padding: '8px 16px', width: 'auto' }}
+                                style={{ margin: 0, justifyContent: 'center' }}
                                 onClick={() => {
-                                  if (scheduleShutdownConfirm && Number.parseInt(scheduleShutdownConfirm) > 0) {
-                                    handleScheduleShutdown(Number.parseInt(scheduleShutdownConfirm) * 60);
+                                  if (scheduleShutdownConfirm && parseInt(scheduleShutdownConfirm) > 0) {
+                                    handleScheduleShutdown(parseInt(scheduleShutdownConfirm) * 60);
                                   }
                                 }}
                               >
-                                {t('shutdown.btn_schedule')}
+                                Schedule
                               </button>
                             </div>
+
+                            <button type="button" className="profile-action-btn profile-shutdown-cancel" onClick={() => { setScheduleShutdownPicker(false); setScheduleShutdownConfirm(""); }}>
+                              {t('common.cancel')}
+                            </button>
                           </motion.div>
                         )}
                       </AnimatePresence>
                     </motion.div>
-                  )}
-
-                  {"pdf to word".includes(appSearchTerm.toLowerCase()) && (
-                    <motion.div
-                      className="list-item"
-                      onClick={handleConvertPdf}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.3 }}
-                      whileHover={{ scale: 1.02, x: 5 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <div className="icon">
-                        <div className="icon">
-                          <PdfIcon />
-                        </div>
-                      </div>
-                      <span>{t('tabs.pdf_to_word')}</span>
-                    </motion.div>
-                  )}
-
-                  {(!appSearchTerm || "color extractor".includes(appSearchTerm.toLowerCase())) && (
-                    <motion.div
-                      className="list-item"
-                      onClick={() => setActiveTab("ColorPicker")}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.35 }}
-                      whileHover={{ scale: 1.02, x: 5 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <div className="icon">
-                        <div className="icon">
-                          <ColorIcon />
-                        </div>
-                      </div>
-                      <span>{t('tabs.color_extractor')}</span>
-                    </motion.div>
-                  )}
-
-                  {(!appSearchTerm || "paint".includes(appSearchTerm.toLowerCase()) || "dibujo".includes(appSearchTerm.toLowerCase()) || "pintura".includes(appSearchTerm.toLowerCase())) && (
-                    <motion.div
-                      className="list-item"
-                      onClick={() => togglePaintMode(true)}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.4 }}
-                      whileHover={{ scale: 1.02, x: 5 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <div className="icon">
-                        <div className="icon">
-                          <PaintIcon />
-                        </div>
-                      </div>
-                      <span>{t('tabs.paint')}</span>
-                    </motion.div>
-                  )}
-
-                  {(!appSearchTerm || "image converter".includes(appSearchTerm.toLowerCase()) || "gif".includes(appSearchTerm.toLowerCase())) && (
-                    <motion.div
-                      className="list-item"
-                      onClick={() => setActiveTab("ImageConverter")}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.45 }}
-                      whileHover={{ scale: 1.02, x: 5 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <div className="icon">
-                        <div className="icon">
-                          <ImageIcon />
-                        </div>
-                      </div>
-                      <span>{t('tabs.image_converter')}</span>
-                    </motion.div>
-                  )}
-
-                  {(!appSearchTerm || "profiles".includes(appSearchTerm.toLowerCase()) || "modes".includes(appSearchTerm.toLowerCase())) && (
-                    <>
-                      <div className="section-label" style={{ marginTop: '20px' }} data-tauri-drag-region>{t('sidebar.profiles')}</div>
-                      <div className="list-item" onClick={() => { setActiveTab("Profiles"); setAppSearchTerm(""); }}>
-                        <div className="icon">
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                        </div>
-                        <span>{t('tabs.profiles')}</span>
-                      </div>
-                    </>
-                  )}
-
-                  {/* Added a filler visual structure just to make it look like the long mockup */}
-                  {"others".includes(appSearchTerm.toLowerCase()) && <div className="section-label" style={{ marginTop: '20px' }} data-tauri-drag-region>OTHERS</div>}
-
-                  {"notifications".includes(appSearchTerm.toLowerCase()) && (
-                    <motion.div
-                      className="list-item"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.5 }}
-                      whileHover={{ scale: 1.02, x: 5 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <div className="icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-                      </div>
-                      <span>{t('tabs.notifications')}</span>
-                    </motion.div>
-                  )}
-
-                  {"settings".includes(appSearchTerm.toLowerCase()) && (
-                    <motion.div
-                      className="list-item"
-                      onClick={() => { setActiveTab("Settings"); setAppSearchTerm(""); }}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.55 }}
-                      whileHover={{ scale: 1.02, x: 5 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <div className="icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                      </div>
-                      <span>{t('tabs.settings')}</span>
-                    </motion.div>
-                  )}
-
-                </motion.div>
-              )}
-
-              {activeTab === "Profiles" && (
-                <motion.div
-                  key="profiles-tab"
-                  className="wa-form-container profiles-container"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                >
-                  <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
-                    <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Back
-                  </div>
-                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
-                    {t('profiles_view.desc')}
-                  </p>
-
-                  <motion.div
-                    className="profile-mode-card"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                    whileHover={{ scale: 1.01 }}
-                  >
-                    <div className="profile-mode-header">
-                      <span className="profile-mode-icon">💼</span>
-                      <span className="profile-mode-title">{t('profiles_view.work_title')}</span>
-                    </div>
-                    <div className="profile-mode-actions">
-                      <button type="button" className="profile-action-btn" onClick={() => setCloseAppsConfirm("leisure")}>
-                        {t('profiles_view.close_leisure')}
-                      </button>
-                      <button type="button" className="profile-action-btn" onClick={handleOpenFocusSettings}>
-                        {t('profiles_view.mute_notifications')}
-                      </button>
-                    </div>
                   </motion.div>
+                )}
 
+                {activeTab === "ColorPicker" && (
                   <motion.div
-                    className="profile-mode-card"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
-                    whileHover={{ scale: 1.01 }}
+                    key="color-tab"
+                    className="wa-form-container"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 25 }}
                   >
-                    <div className="profile-mode-header">
-                      <span className="profile-mode-icon">🎮</span>
-                      <span className="profile-mode-title">{t('profiles_view.gaming_title')}</span>
+                    <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                      <BackIcon /> <span style={{ marginLeft: '8px' }}>{t('common.back')}</span>
                     </div>
-                    <div className="profile-mode-actions">
-                      <button type="button" className="profile-action-btn" onClick={() => setCloseAppsConfirm("heavy")}>
-                        {t('profiles_view.close_heavy')}
-                      </button>
-                      <button type="button" className="profile-action-btn" onClick={handleOpenFocusSettings}>
-                        {t('profiles_view.disable_notifications')}
-                      </button>
-                    </div>
+                    <ColorExtractor t={t} />
                   </motion.div>
+                )}
 
+                {activeTab === "Settings" && (
                   <motion.div
-                    className="profile-mode-card"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                    whileHover={{ scale: 1.01 }}
+                    key="settings-tab"
+                    className="wa-form-container"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 25 }}
                   >
-                    <div className="profile-mode-header">
-                      <span className="profile-mode-icon">🌙</span>
-                      <span className="profile-mode-title">{t('profiles_view.sleep_title')}</span>
+                    <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                      <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Back
                     </div>
-                    <div className="profile-mode-actions">
-                      <button type="button" className="profile-action-btn" onClick={() => setCloseAppsConfirm("all")}>
-                        {t('profiles_view.close_everything')}
-                      </button>
-                      <button type="button" className="profile-action-btn" onClick={() => setScheduleShutdownPicker(!scheduleShutdownPicker)}>
-                        {t('profiles_view.schedule_shutdown')}
-                      </button>
-                    </div>
-                    <AnimatePresence>
-                      {scheduleShutdownPicker && (
-                        <motion.div
-                          className="profile-shutdown-picker"
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          style={{ overflow: 'hidden' }}
-                        >
-                          <span className="profile-shutdown-label" style={{ color: 'var(--text-primary)' }}>{t('shutdown.label_mins')}</span>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
-                            <input
-                              type="number"
-                              min="1"
-                              placeholder="e.g. 15"
-                              value={scheduleShutdownConfirm}
-                              onChange={(e) => setScheduleShutdownConfirm(e.target.value)}
-                              style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
-                            />
-                            <button
-                              type="button"
-                              className="profile-action-btn"
-                              style={{ margin: 0, justifyContent: 'center' }}
-                              onClick={() => {
-                                if (scheduleShutdownConfirm && parseInt(scheduleShutdownConfirm) > 0) {
-                                  handleScheduleShutdown(parseInt(scheduleShutdownConfirm) * 60);
-                                }
-                              }}
-                            >
-                              Schedule
-                            </button>
-                          </div>
+                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+                      {t('settings_view.desc')}
+                    </p>
 
-                          <button type="button" className="profile-action-btn profile-shutdown-cancel" onClick={() => { setScheduleShutdownPicker(false); setScheduleShutdownConfirm(""); }}>
-                            {t('common.cancel')}
-                          </button>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </motion.div>
-                </motion.div>
-              )}
-
-              {activeTab === "ColorPicker" && (
-                <motion.div
-                  key="color-tab"
-                  className="wa-form-container"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                >
-                  <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
-                    <BackIcon /> <span style={{ marginLeft: '8px' }}>{t('common.back')}</span>
-                  </div>
-                  <ColorExtractor t={t} />
-                </motion.div>
-              )}
-
-              {activeTab === "Settings" && (
-                <motion.div
-                  key="settings-tab"
-                  className="wa-form-container"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                >
-                  <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
-                    <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Back
-                  </div>
-                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
-                    {t('settings_view.desc')}
-                  </p>
-
-                  <motion.div
-                    className={`list-item ${isAutostartEnabled ? "active" : ""}`}
-                    onClick={handleToggleAutostart}
-                    whileHover={{ scale: 1.02, x: 5 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <div className="icon">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
-                    </div>
-                    <span>{t('autostart.title')}</span>
-                    <div className={`toggle-switch ${isAutostartEnabled ? "active" : ""}`}>
-                      <div className="toggle-knob"></div>
-                    </div>
-                  </motion.div>
-
-                  <div className="section-label" style={{ marginTop: '20px' }}>{t('support.title')}</div>
-                  <motion.div
-                    className="list-item"
-                    onClick={handleRepairPermissions}
-                    whileHover={{ scale: 1.02, x: 5 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <div className="icon">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span>{t('support.repair_title')}</span>
-                      <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{t('support.repair_desc')}</span>
-                    </div>
-                  </motion.div>
-                </motion.div>
-              )}
-
-              {activeTab === "WhatsApp" && (
-                <motion.div
-                  key="whatsapp-tab"
-                  className="wa-form-container"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                >
-                  <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
-                    <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> {t('common.back')}
-                  </div>
-
-                  <ContactPicker
-                    contacts={contacts}
-                    onSelect={(c) => {
-                      const cleaned = c.phone.replace(/[^\d+]/g, "");
-                      setWaPhone(cleaned);
-                    }}
-                    currentPhone={waPhone}
-                    onRefresh={async () => {
-                      setIsLoadingContacts(true);
-                      setContactError(null);
-                      try {
-                        const data = await invoke("get_contacts");
-                        setContacts(data as Contact[]);
-                      } catch (err) {
-                        console.error(err);
-                        setContactError(err as string);
-                      } finally {
-                        setIsLoadingContacts(false);
-                      }
-                    }}
-                  />
-                  {isLoadingContacts && (
-                    <div style={{ textAlign: 'center', padding: '10px', fontSize: '12px', color: 'var(--accent-color)' }}>
-                      ⌛ {t('common.processing')}
-                    </div>
-                  )}
-
-                  <label className="wa-form-label" style={{ marginTop: '18px' }}>{t('whatsapp.label_phone')}</label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <select
-                      value={countryCode}
-                      onChange={(e) => setCountryCode(e.target.value)}
-                      className="country-select"
+                    <motion.div
+                      className={`list-item ${isAutostartEnabled ? "active" : ""}`}
+                      onClick={handleToggleAutostart}
+                      whileHover={{ scale: 1.02, x: 5 }}
+                      whileTap={{ scale: 0.98 }}
                     >
-                      <option value="+52">🇲🇽 +52</option>
-                      <option value="+1">🇺🇸 +1</option>
-                      <option value="+34">🇪🇸 +34</option>
-                      <option value="+54">🇦🇷 +54</option>
-                      <option value="+57">🇨🇴 +57</option>
-                      <option value="+56">🇨🇱 +56</option>
-                      <option value="+51">🇵🇪 +51</option>
-                      <option value="+44">🇬🇧 +44</option>
-                    </select>
-                    <input
-                      type="text"
-                      value={waPhone}
-                      onChange={e => setWaPhone(e.target.value.replace(/\D/g, ""))}
-                      placeholder="443 123 4567"
-                      style={{ flex: 1 }}
+                      <div className="icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
+                      </div>
+                      <span>{t('autostart.title')}</span>
+                      <div className={`toggle-switch ${isAutostartEnabled ? "active" : ""}`}>
+                        <div className="toggle-knob"></div>
+                      </div>
+                    </motion.div>
+
+                    <div className="section-label" style={{ marginTop: '20px' }}>{t('support.title')}</div>
+                    <motion.div
+                      className="list-item"
+                      onClick={handleRepairPermissions}
+                      whileHover={{ scale: 1.02, x: 5 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <div className="icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span>{t('support.repair_title')}</span>
+                        <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{t('support.repair_desc')}</span>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+
+                {activeTab === "WhatsApp" && (
+                  <motion.div
+                    key="whatsapp-tab"
+                    className="wa-form-container"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                  >
+                    <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                      <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> {t('common.back')}
+                    </div>
+
+                    <ContactPicker
+                      contacts={contacts}
+                      onSelect={(c) => {
+                        const cleaned = c.phone.replace(/[^\d+]/g, "");
+                        setWaPhone(cleaned);
+                      }}
+                      currentPhone={waPhone}
+                      onRefresh={async () => {
+                        setIsLoadingContacts(true);
+                        setContactError(null);
+                        try {
+                          const data = await invoke("get_contacts");
+                          setContacts(data as Contact[]);
+                        } catch (err) {
+                          console.error(err);
+                          setContactError(err as string);
+                        } finally {
+                          setIsLoadingContacts(false);
+                        }
+                      }}
                     />
-                  </div>
+                    {isLoadingContacts && (
+                      <div style={{ textAlign: 'center', padding: '10px', fontSize: '12px', color: 'var(--accent-color)' }}>
+                        ⌛ {t('common.processing')}
+                      </div>
+                    )}
 
-                  {contactError && (
-                    <div style={{ textAlign: 'center', padding: '10px', fontSize: '12px', color: '#ff5555' }}>
-                      ❌ Error: {contactError}
-                    </div>
-                  )}
-
-                  <label className="wa-form-label" style={{ marginTop: '8px' }}>{t('whatsapp.label_message')}</label>
-                  <textarea
-                    value={waMsg}
-                    onChange={e => setWaMsg(e.target.value)}
-                    placeholder={t('whatsapp.placeholder_message')}
-                    style={{ minHeight: '80px', resize: 'vertical' }}
-                  />
-
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                    <div style={{ flex: 1, position: 'relative' }}>
-                      <label className="wa-form-label">{t('whatsapp.date')}</label>
-                      <DatePicker
-                        selected={waDateTime}
-                        onChange={(date: Date | null) => setWaDateTime(date)}
-                        dateFormat="MM/dd/yyyy"
-                        className="custom-datepicker"
-                        minDate={new Date()}
-                        maxDate={new Date(new Date().getFullYear(), 11, 31)}
-                        placeholderText={t('common.select')}
-                        portalId="root"
+                    <label className="wa-form-label" style={{ marginTop: '18px' }}>{t('whatsapp.label_phone')}</label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <select
+                        value={countryCode}
+                        onChange={(e) => setCountryCode(e.target.value)}
+                        className="country-select"
+                      >
+                        <option value="+52">🇲🇽 +52</option>
+                        <option value="+1">🇺🇸 +1</option>
+                        <option value="+34">🇪🇸 +34</option>
+                        <option value="+54">🇦🇷 +54</option>
+                        <option value="+57">🇨🇴 +57</option>
+                        <option value="+56">🇨🇱 +56</option>
+                        <option value="+51">🇵🇪 +51</option>
+                        <option value="+44">🇬🇧 +44</option>
+                      </select>
+                      <input
+                        type="text"
+                        value={waPhone}
+                        onChange={e => setWaPhone(e.target.value.replace(/\D/g, ""))}
+                        placeholder="443 123 4567"
+                        style={{ flex: 1 }}
                       />
                     </div>
-                    <div style={{ flex: 1, position: 'relative' }}>
-                      <label className="wa-form-label">{t('whatsapp.time')}</label>
-                      <DatePicker
-                        selected={waDateTime}
-                        onChange={(date: Date | null) => setWaDateTime(date)}
-                        showTimeSelect
-                        showTimeSelectOnly
-                        timeIntervals={1}
-                        timeCaption={t('whatsapp.time')}
-                        dateFormat="h:mm aa"
-                        className="custom-datepicker"
-                        placeholderText={t('common.select')}
-                        portalId="root"
-                      />
+
+                    {contactError && (
+                      <div style={{ textAlign: 'center', padding: '10px', fontSize: '12px', color: '#ff5555' }}>
+                        ❌ Error: {contactError}
+                      </div>
+                    )}
+
+                    <label className="wa-form-label" style={{ marginTop: '8px' }}>{t('whatsapp.label_message')}</label>
+                    <textarea
+                      value={waMsg}
+                      onChange={e => setWaMsg(e.target.value)}
+                      placeholder={t('whatsapp.placeholder_message')}
+                      style={{ minHeight: '80px', resize: 'vertical' }}
+                    />
+
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                      <div style={{ flex: 1, position: 'relative' }}>
+                        <label className="wa-form-label">{t('whatsapp.date')}</label>
+                        <DatePicker
+                          selected={waDateTime}
+                          onChange={(date: Date | null) => setWaDateTime(date)}
+                          dateFormat="MM/dd/yyyy"
+                          className="custom-datepicker"
+                          minDate={new Date()}
+                          maxDate={new Date(new Date().getFullYear(), 11, 31)}
+                          placeholderText={t('common.select')}
+                          portalId="root"
+                        />
+                      </div>
+                      <div style={{ flex: 1, position: 'relative' }}>
+                        <label className="wa-form-label">{t('whatsapp.time')}</label>
+                        <DatePicker
+                          selected={waDateTime}
+                          onChange={(date: Date | null) => setWaDateTime(date)}
+                          showTimeSelect
+                          showTimeSelectOnly
+                          timeIntervals={1}
+                          timeCaption={t('whatsapp.time')}
+                          dateFormat="h:mm aa"
+                          className="custom-datepicker"
+                          placeholderText={t('common.select')}
+                          portalId="root"
+                        />
+                      </div>
                     </div>
-                  </div>
 
-                  <button className="wa-submit-btn" onClick={handleScheduleWa} style={{ marginTop: '16px' }}>
-                    {t('whatsapp.btn_schedule')}
-                  </button>
-                </motion.div>
-              )}
+                    <button className="wa-submit-btn" onClick={handleScheduleWa} style={{ marginTop: '16px' }}>
+                      {t('whatsapp.btn_schedule')}
+                    </button>
+                  </motion.div>
+                )}
 
-              {activeTab === "ImageConverter" && (
-                <motion.div
-                  key="image-converter-tab"
-                  className="wa-form-container"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                >
-                  <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
-                    <BackIcon /> <span style={{ marginLeft: '8px' }}>{t('common.back')}</span>
-                  </div>
-                  <ImageConverter showToast={showToast} t={t} />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-        </div>
-      </div> {/* End of sidebar-content */}
-
-      {toast.visible && (
-        <div className={`toast-notification ${toast.visible ? 'visible' : ''}`}>
-          <span style={{ marginRight: '8px' }}>✨</span>
-          {toast.message}
-        </div>
-      )}
-
-      {isPetMode && <PetAgent isSidebarVisible={isSidebarOpen} />}
-
-      {pdfConversion.active && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.7)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10000,
-          color: 'white',
-          padding: '24px'
-        }}>
-          <div style={{
-            backgroundColor: 'var(--bg-secondary)',
-            padding: '24px',
-            borderRadius: '16px',
-            width: '100%',
-            maxWidth: '300px',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-            border: '1px solid var(--border-color)',
-            textAlign: 'center'
-          }}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>{t('pdf.processing')}</h3>
-            <div style={{
-              width: '100%',
-              height: '8px',
-              backgroundColor: 'rgba(255,255,255,0.1)',
-              borderRadius: '4px',
-              overflow: 'hidden',
-              marginBottom: '12px'
-            }}>
-              <div style={{
-                width: `${pdfConversion.progress * 100}%`,
-                height: '100%',
-                backgroundColor: 'var(--accent-color)',
-                transition: 'width 0.3s ease'
-              }} />
+                {activeTab === "ImageConverter" && (
+                  <motion.div
+                    key="image-converter-tab"
+                    className="wa-form-container"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                  >
+                    <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                      <BackIcon /> <span style={{ marginLeft: '8px' }}>{t('common.back')}</span>
+                    </div>
+                    <ImageConverter showToast={showToast} t={t} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
-              {pdfConversion.step}
-            </p>
-          </div>
-        </div>
-      )}
 
-      {isRepairing && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.7)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10000,
-          color: 'white',
-          padding: '24px'
-        }}>
+          </div>
+        </div> {/* End of sidebar-content */}
+
+        {toast.visible && (
+          <div className={`toast-notification ${toast.visible ? 'visible' : ''}`}>
+            <span style={{ marginRight: '8px' }}>✨</span>
+            {toast.message}
+          </div>
+        )}
+
+        {isPetMode && <PetAgent isSidebarVisible={isSidebarOpen} />}
+
+        {pdfConversion.active && (
           <div style={{
-            backgroundColor: 'var(--bg-secondary)',
-            padding: '24px',
-            borderRadius: '16px',
-            width: '100%',
-            maxWidth: '280px',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-            border: '1px solid var(--border-color)',
-            textAlign: 'center'
-          }}>
-            <div className="loading-spinner" style={{ margin: '0 auto 16px auto', width: '32px', height: '32px' }} />
-            <h3 style={{ margin: '0 0 8px 0', fontSize: '16px' }}>{t('repair.title')}</h3>
-            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>{t('repair.desc')}</p>
-          </div>
-        </div>
-      )}
-
-      {repairDone && (
-        <div
-          style={{
             position: 'fixed',
             top: 0,
             left: 0,
@@ -1516,63 +1444,149 @@ function App() {
             justifyContent: 'center',
             zIndex: 10000,
             color: 'white',
-            padding: '24px',
-            pointerEvents: 'all',
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div style={{
-            backgroundColor: 'var(--bg-secondary)',
-            padding: '24px',
-            borderRadius: '16px',
-            width: '100%',
-            maxWidth: '280px',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-            border: '1px solid var(--border-color)',
-            textAlign: 'center',
-            pointerEvents: 'all',
+            padding: '24px'
           }}>
-            <div style={{ fontSize: '36px', marginBottom: '12px' }}>✅</div>
-            <h3 style={{ margin: '0 0 8px 0', fontSize: '16px' }}>{t('repair.dialog_title')}</h3>
-            <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-              {t('repair.toast_success')}
-            </p>
-            <button
-              onClick={async (e) => { e.stopPropagation(); setRepairDone(false); await invoke("restart_app"); }}
-              style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'var(--accent-color)', color: 'white', cursor: 'pointer', fontSize: '14px', fontWeight: 600, pointerEvents: 'all' }}
-            >
-              {t('common.confirm')}
-            </button>
+            <div style={{
+              backgroundColor: 'var(--bg-secondary)',
+              padding: '24px',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '300px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              border: '1px solid var(--border-color)',
+              textAlign: 'center'
+            }}>
+              <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>{t('pdf.processing')}</h3>
+              <div style={{
+                width: '100%',
+                height: '8px',
+                backgroundColor: 'rgba(255,255,255,0.1)',
+                borderRadius: '4px',
+                overflow: 'hidden',
+                marginBottom: '12px'
+              }}>
+                <div style={{
+                  width: `${pdfConversion.progress * 100}%`,
+                  height: '100%',
+                  backgroundColor: 'var(--accent-color)',
+                  transition: 'width 0.3s ease'
+                }} />
+              </div>
+              <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
+                {pdfConversion.step}
+              </p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {isExtracting && (
-        <div style={{
-          position: 'fixed',
-          top: '32px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          backgroundColor: 'rgba(0,0,0,0.85)',
-          backdropFilter: 'blur(12px)',
-          padding: '12px 24px',
-          borderRadius: '24px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          zIndex: 11000,
-          border: '1px solid rgba(255,255,255,0.1)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-          color: 'white',
-          minWidth: '200px',
-          justifyContent: 'center'
-        }}>
-          <div className="loading-spinner" style={{ width: '18px', height: '18px', borderWidth: '2px' }} />
-          <span style={{ fontSize: '14px', fontWeight: 500, letterSpacing: '-0.01em' }}>{t('common.ocr_loading')}</span>
-        </div>
-      )}
+        {isRepairing && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+            color: 'white',
+            padding: '24px'
+          }}>
+            <div style={{
+              backgroundColor: 'var(--bg-secondary)',
+              padding: '24px',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '280px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              border: '1px solid var(--border-color)',
+              textAlign: 'center'
+            }}>
+              <div className="loading-spinner" style={{ margin: '0 auto 16px auto', width: '32px', height: '32px' }} />
+              <h3 style={{ margin: '0 0 8px 0', fontSize: '16px' }}>{t('repair.title')}</h3>
+              <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>{t('repair.desc')}</p>
+            </div>
+          </div>
+        )}
 
-    </div>
+        {repairDone && (
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.7)',
+              backdropFilter: 'blur(4px)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10000,
+              color: 'white',
+              padding: '24px',
+              pointerEvents: 'all',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{
+              backgroundColor: 'var(--bg-secondary)',
+              padding: '24px',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '280px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              border: '1px solid var(--border-color)',
+              textAlign: 'center',
+              pointerEvents: 'all',
+            }}>
+              <div style={{ fontSize: '36px', marginBottom: '12px' }}>✅</div>
+              <h3 style={{ margin: '0 0 8px 0', fontSize: '16px' }}>{t('repair.dialog_title')}</h3>
+              <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                {t('repair.toast_success')}
+              </p>
+              <button
+                onClick={async (e) => { e.stopPropagation(); setRepairDone(false); await invoke("restart_app"); }}
+                style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'var(--accent-color)', color: 'white', cursor: 'pointer', fontSize: '14px', fontWeight: 600, pointerEvents: 'all' }}
+              >
+                {t('common.confirm')}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isExtracting && (
+          <div style={{
+            position: 'fixed',
+            top: '32px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            backdropFilter: 'blur(12px)',
+            padding: '12px 24px',
+            borderRadius: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            zIndex: 11000,
+            border: '1px solid rgba(255,255,255,0.1)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+            color: 'white',
+            minWidth: '200px',
+            justifyContent: 'center'
+          }}>
+            <div className="loading-spinner" style={{ width: '18px', height: '18px', borderWidth: '2px' }} />
+            <span style={{ fontSize: '14px', fontWeight: 500, letterSpacing: '-0.01em' }}>{t('common.ocr_loading')}</span>
+          </div>
+        )}
+
+      </div>
+    </>
   );
 }
 
