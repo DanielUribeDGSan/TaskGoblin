@@ -38,7 +38,12 @@ async fn toggle_mouse(state: State<'_, AppState>) -> Result<bool, String> {
 }
 
 #[tauri::command]
-async fn schedule_whatsapp(phone: String, message: String, delay_secs: u64) -> Result<(), String> {
+async fn schedule_whatsapp(
+    app_handle: tauri::AppHandle,
+    phone: String,
+    message: String,
+    delay_secs: u64,
+) -> Result<(), String> {
     // Strictly sanitize phone
     let sanitized_phone = phone
         .chars()
@@ -78,12 +83,28 @@ async fn schedule_whatsapp(phone: String, message: String, delay_secs: u64) -> R
 
         #[cfg(target_os = "windows")]
         {
-            use std::os::windows::process::CommandExt;
-            // Open WhatsApp (desktop or Store) via default protocol handler; no console window.
-            let _ = std::process::Command::new("cmd")
-                .args(["/C", "start", "", &url])
-                .creation_flags(0x08000000) // CREATE_NO_WINDOW
-                .spawn();
+            use tauri_plugin_opener::OpenerExt;
+            
+            // Show notification that we are starting
+            use tauri_plugin_notification::NotificationExt;
+            let _ = app_handle.notification()
+                .builder()
+                .title("TaskGoblin")
+                .body(format!("Sending WhatsApp message to {}", sanitized_phone))
+                .show();
+
+            // Open URL via Tauri's robust opener which handles Windows correctly
+            let _ = app_handle.opener().open_url(&url, None::<&str>);
+
+            // Auto-send logic for Windows: wait 6s for the app to load the chat, then hit Enter
+            tokio::time::sleep(tokio::time::Duration::from_secs(6)).await;
+            let _ = tauri::async_runtime::spawn_blocking(move || {
+                use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+                if let Ok(mut enigo) = Enigo::new(&Settings::default()) {
+                    let _ = enigo.key(Key::Return, Direction::Click);
+                }
+            })
+            .await;
         }
 
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]

@@ -577,7 +577,15 @@ function App() {
       }
 
       const now = new Date();
-      const delayMs = waDateTime.getTime() - now.getTime();
+      let scheduledDate = new Date(waDateTime);
+
+      // If the selected time has already passed today, assume the user means tomorrow
+      if (scheduledDate < now && scheduledDate.toDateString() === now.toDateString()) {
+        console.log("Auto-incrementing scheduled date to tomorrow as today's time has passed");
+        scheduledDate.setDate(scheduledDate.getDate() + 1);
+      }
+
+      const delayMs = scheduledDate.getTime() - now.getTime();
       if (delayMs < 0) {
         showToast(t('whatsapp.toast_past_date'));
         return;
@@ -590,7 +598,7 @@ function App() {
         message: waMsg,
         delaySecs: delaySecs
       }).then(() => {
-        showToast(t('whatsapp.toast_scheduled').replace('{0}', waDateTime.toLocaleString()));
+        showToast(t('whatsapp.toast_scheduled').replace('{0}', scheduledDate.toLocaleString()));
         setWaPhone("");
         setWaMsg("");
         setWaDateTime(new Date());
