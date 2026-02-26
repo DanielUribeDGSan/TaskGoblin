@@ -1195,6 +1195,15 @@ fn fix_ocr_spanish_accents(s: String) -> String {
         .replace('Ì', "Í")
         .replace('ù', "ú")
         .replace('Ù', "Ú")
+        // Misreads from user examples
+        .replace("iS", "¡S")
+        .replace(" 10 ", " lo ")
+        .replace(" dd ", " del ")
+        .replace("mensaJe", "mensaje")
+        .replace("errorz", "errores")
+        .replace("conv«sión", "conversión")
+        .replace("Sistana", "Sistema")
+        .replace("EI ", "El ")
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -1452,8 +1461,18 @@ try {
     $g   = [System.Drawing.Graphics]::FromImage($bmp)
     $g.CopyFromScreen($x, $y, 0, 0, (New-Object System.Drawing.Size($w, $h)))
     $g.Dispose()
-    $bmp.Save($env:OCR_IMG_PATH, [System.Drawing.Imaging.ImageFormat]::Png)
+    
+    # 2. Scale 2x for better OCR recognition quality
+    $sw = $w * 2; $sh = $h * 2
+    $sbmp = New-Object System.Drawing.Bitmap($sw, $sh)
+    $sg = [System.Drawing.Graphics]::FromImage($sbmp)
+    $sg.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $sg.DrawImage($bmp, 0, 0, $sw, $sh)
+    $sg.Dispose()
     $bmp.Dispose()
+
+    $sbmp.Save($env:OCR_IMG_PATH, [System.Drawing.Imaging.ImageFormat]::Png)
+    $sbmp.Dispose()
 
     # 2. Perform OCR (load WinRT types)
     $null = [Windows.Media.Ocr.OcrEngine,             Windows.Foundation, ContentType=WindowsRuntime]
@@ -1500,9 +1519,33 @@ try {
 
     $result = Await ($engine.RecognizeAsync($softBmp)) ([Windows.Media.Ocr.OcrResult])
     if ($result -and $result.Lines) {
-        $rawText = ($result.Lines | ForEach-Object { $_.Text }) -join "`r`n"
+        $lines = @($result.Lines)
+        $fullText = ""
+        for ($i = 0; $i -lt $lines.Count; $i++) {
+            $line = $lines[$i]
+            $fullText += $line.Text
+            if ($i -lt ($lines.Count - 1)) {
+                try {
+                    $nextLine = $lines[$i+1]
+                    # Robust coordinate access: Cast to double to ensure safe math
+                    $lineRect = $line.Rect
+                    $nextRect = $nextLine.Rect
+                    $gap = [double]$nextRect.Y - ([double]$lineRect.Y + [double]$lineRect.Height)
+                    $avgHeight = ([double]$lineRect.Height + [double]$nextRect.Height) / 2
+                    
+                    if ($gap -gt ($avgHeight * 0.7)) {
+                        $fullText += "`r`n`r`n"
+                    } else {
+                        $fullText += "`r`n"
+                    }
+                } catch {
+                    # Fallback if coordinate math fails
+                    $fullText += "`r`n"
+                }
+            }
+        }
         # Bulletproof: Encode output as Base64 to bypass all console encoding issues
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes($rawText)
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($fullText)
         $b64 = [System.Convert]::ToBase64String($bytes)
         Write-Output "B64:$b64"
     }
