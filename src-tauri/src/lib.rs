@@ -53,11 +53,14 @@ async fn toggle_mouse(state: State<'_, AppState>) -> Result<bool, String> {
 
 #[tauri::command]
 async fn schedule_whatsapp(
-    _app_handle: tauri::AppHandle,
+    app_handle: tauri::AppHandle,
     phone: String,
     message: String,
     delay_secs: u64,
 ) -> Result<(), String> {
+    #[cfg(not(target_os = "windows"))]
+    let _ = app_handle;
+
     // Strictly sanitize phone
     let sanitized_phone = phone
         .chars()
@@ -1312,7 +1315,6 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
     }
     #[cfg(target_os = "windows")]
     {
-        use std::fs;
         use std::process::Command;
 
         let app_handle = window.app_handle().clone();
