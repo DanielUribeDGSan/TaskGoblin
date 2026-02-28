@@ -445,9 +445,9 @@ textarea {
   font-size: 13px;
   font-weight: 500;
   transition: all 0.2s ease;
-  background: var(--bg-secondary) !important;
+  background: var(--bg-secondary);
   border: none;
-  color: var(--text-primary) !important;
+  color: var(--text-primary);
   padding: 10px;
   border-radius: 8px;
   outline: none;
@@ -457,6 +457,10 @@ textarea {
 input:focus,
 textarea:focus {
   border-color: var(--accent-color) !important;
+}
+
+.pdf-canvas-container textarea {
+  background: transparent;
 }
 
 .no-focus-input:focus {

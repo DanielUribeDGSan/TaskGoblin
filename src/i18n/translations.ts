@@ -72,6 +72,12 @@ export const translations = {
             toast_success: "PDF converted successfully! Saved to Downloads. 📄✨",
             step_init: "Initializing...",
         },
+        pdf_tools: {
+            edit_title: "Edit PDF",
+            edit_btn: "Open PDF Editor",
+            convert_title: "Convert PDF to Word",
+            convert_btn: "Select PDF file",
+        },
         image: {
             title: "Image Converter 🖼️",
             desc: "Convert, resize and compress your images.",
@@ -227,6 +233,12 @@ export const translations = {
         pdf: {
             toast_success: "¡PDF convertido con éxito! Guardado en Descargas. 📄✨",
             step_init: "Iniciando...",
+        },
+        pdf_tools: {
+            edit_title: "Editar PDF",
+            edit_btn: "Abrir Editor de PDF",
+            convert_title: "Convertir PDF a Word",
+            convert_btn: "Seleccionar archivo PDF",
         },
         image: {
             title: "Convertidor de Imagen 🖼️",

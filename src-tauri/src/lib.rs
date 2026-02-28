@@ -1,13 +1,28 @@
 use device_query::{DeviceQuery, DeviceState, Keycode};
 use enigo::{Enigo, Mouse, Settings};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, State, Wry,
 };
-// No longer using tokio::sync::Mutex for simpluse std::sync::Arc;
-use std::sync::Arc;
+
+#[derive(Serialize, Deserialize, Debug)]
+struct AppConfig {
+    last_x: Option<i32>,
+    last_y: Option<i32>,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            last_x: None,
+            last_y: None,
+        }
+    }
+}
 
 struct AppState {
     mouse_moving: std::sync::Mutex<bool>,
@@ -39,7 +54,7 @@ async fn toggle_mouse(state: State<'_, AppState>) -> Result<bool, String> {
 
 #[tauri::command]
 async fn schedule_whatsapp(
-    app_handle: tauri::AppHandle,
+    _app_handle: tauri::AppHandle,
     phone: String,
     message: String,
     delay_secs: u64,
@@ -84,10 +99,11 @@ async fn schedule_whatsapp(
         #[cfg(target_os = "windows")]
         {
             use tauri_plugin_opener::OpenerExt;
-            
+
             // Show notification that we are starting
             use tauri_plugin_notification::NotificationExt;
-            let _ = app_handle.notification()
+            let _ = app_handle
+                .notification()
                 .builder()
                 .title("TaskGoblin")
                 .body(format!("Sending WhatsApp message to {}", sanitized_phone))
@@ -1758,104 +1774,77 @@ async fn convert_pdf_to_word(
     let output_path = downloads_dir.join(format!("{}.docx", file_name));
     let output_str = output_path.to_string_lossy().to_string();
 
-    // ── macOS: Python + pdf2docx (unchanged) ────────────────────────────────
+    // ── macOS: Microsoft Word Automation ─────────────────────────────────────
     #[cfg(target_os = "macos")]
     {
-        emit_progress("Initializing converter...", 0.1);
+        emit_progress("Iniciando Word...", 0.2);
 
-        // 1. Resolve venv path in home dir
-        let home = std::env::var("HOME").map_err(|e| e.to_string())?;
-        let venv_dir = Path::new(&home).join(".taskgoblin_venv");
+        let word_check = Command::new("mdfind")
+            .arg("kMDItemCFBundleIdentifier == 'com.microsoft.Word'")
+            .output();
 
-        // 2. Create venv if not present
-        if !venv_dir.exists() {
-            emit_progress("Setting up Python environment...", 0.2);
-            let venv_status = Command::new("python3")
-                .arg("-m")
-                .arg("venv")
-                .arg(&venv_dir)
-                .status()
-                .map_err(|e| format!("Failed to create venv: {}", e))?;
-            if !venv_status.success() {
-                return Err("Failed to create Python virtual environment".to_string());
-            }
+        let word_installed = match word_check {
+            Ok(output) => String::from_utf8_lossy(&output.stdout).trim().len() > 0,
+            Err(_) => false,
+        };
+
+        if !word_installed {
+            return Err(
+                "Microsoft Word no está instalado. Instala MS Office para usar la conversión."
+                    .to_string(),
+            );
         }
 
-        let python_bin = venv_dir.join("bin").join("python3");
-        let pip_bin = venv_dir.join("bin").join("pip3");
+        emit_progress("Guardando diseño original...", 0.6);
 
-        // 3. Install pdf2docx if needed
-        let mod_check = Command::new(&python_bin)
-            .arg("-c")
-            .arg("import pdf2docx")
-            .status()
-            .map_err(|e| format!("Failed to check pdf2docx: {}", e))?;
+        let applescript = format!(
+            r#"
+tell application "Microsoft Word"
+    try
+        set display alerts to none
+    end try
+    try
+        open POSIX file "{}"
+        
+        save as active document file name POSIX file "{}" file format format document
+        close active document saving no
+        try
+            set display alerts to all
+        end try
+        return "SUCCESS"
+    on error errMsg
+        try
+            set display alerts to all
+        end try
+        try
+            close active document saving no
+        end try
+        return "ERROR:" & errMsg
+    end try
+end tell"#,
+            pdf_path, output_str
+        );
 
-        if !mod_check.success() {
-            emit_progress("Installing libraries (first time only)...", 0.4);
-            let pip_status = Command::new(&pip_bin)
-                .arg("install")
-                .arg("pdf2docx")
-                .status()
-                .map_err(|e| format!("Failed to install pdf2docx: {}", e))?;
-            if !pip_status.success() {
-                return Err("Failed to install pdf2docx via pip".to_string());
-            }
-        }
-
-        emit_progress("Converting PDF to Word...", 0.6);
-
-        let py_script = r#"
-import sys
-import os
-from pdf2docx import Converter
-
-os.environ['TERM'] = 'dumb'
-pdf_file  = sys.argv[1]
-docx_file = sys.argv[2]
-try:
-    cv = Converter(pdf_file)
-    cv.convert(docx_file, start=0, end=None, multi_processing=False,
-               line_margin=0.5, word_margin=0.2, char_margin=0.05)
-    cv.close()
-    print("STATUS:SUCCESS")
-except Exception as e:
-    err_msg = str(e)
-    if "Words count: 0" in err_msg or "not supported" in err_msg.lower():
-        print("STATUS:ERROR_SCANNED_PDF")
-    else:
-        print(f"STATUS:ERROR:{err_msg}")
-    sys.exit(1)
-"#;
-
-        let pdf_path_clone = pdf_path.clone();
-        let output_str_clone = output_str.clone();
-
-        let output = tauri::async_runtime::spawn_blocking(move || {
-            Command::new(&python_bin)
-                .arg("-c")
-                .arg(py_script)
-                .arg(&pdf_path_clone)
-                .arg(&output_str_clone)
+        let as_output = tauri::async_runtime::spawn_blocking(move || {
+            Command::new("osascript")
+                .arg("-e")
+                .arg(&applescript)
                 .output()
         })
         .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| format!("Failed to execute python converter script: {}", e))?;
+        .map_err(|e| e.to_string())?;
 
-        if !output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            if stdout.contains("STATUS:ERROR_SCANNED_PDF") {
-                return Err("Este PDF parece ser una imagen o estar escaneado. No se puede convertir a texto editable directamente.".to_string());
-            } else if let Some(err_idx) = stdout.find("STATUS:ERROR:") {
-                let user_err = &stdout[err_idx + 13..];
-                return Err(format!("Error en la conversión: {}", user_err.trim()));
+        if let Ok(out) = as_output {
+            let as_stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if out.status.success() && as_stdout.contains("SUCCESS") {
+                emit_progress("Terminado", 1.0);
+                return Ok(output_str);
+            } else {
+                return Err(format!("Word falló: {}", as_stdout));
             }
-            return Err("Hubo un problema técnico al convertir el archivo. Verifica que el PDF no esté protegido.".to_string());
         }
 
-        emit_progress("Done!", 1.0);
-        return Ok(output_str);
+        return Err("Error de AppleScript.".to_string());
     }
 
     // ── Windows: Microsoft Word COM automation (no Python needed) ───────────
@@ -1937,6 +1926,19 @@ try {
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     Err("PDF conversion not supported on this OS".to_string())
+}
+
+#[tauri::command]
+async fn read_pdf_file(path: String) -> Result<Vec<u8>, String> {
+    use std::fs;
+    fs::read(&path).map_err(|e| format!("Failed to read PDF: {}", e))
+}
+
+#[tauri::command]
+async fn save_pdf_file(path: String, bytes: Vec<u8>) -> Result<(), String> {
+    use std::fs;
+    fs::write(&path, bytes).map_err(|e| format!("Failed to save PDF: {}", e))?;
+    Ok(())
 }
 
 /// Called by the Tauri capture overlay (capture.tsx) when the user releases the mouse.
@@ -2095,6 +2097,32 @@ fn spawn_key_listener(app_handle: tauri::AppHandle) {
     });
 }
 
+#[tauri::command]
+async fn resize_window(
+    window: tauri::Window,
+    width: f64,
+    height: f64,
+    center: bool,
+) -> Result<(), String> {
+    let _ = window.set_resizable(true);
+    let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(width, height)));
+    if center {
+        let _ = window.center();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn restore_window(window: tauri::Window, state: State<'_, AppState>) -> Result<(), String> {
+    let _ = window.set_resizable(false);
+    let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(440.0, 820.0)));
+    let pos_lock = state.last_tray_pos.lock().await;
+    if let Some(pos) = *pos_lock {
+        let _ = window.set_position(tauri::Position::Physical(pos));
+    }
+    Ok(())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_autostart::Builder::new().build())
@@ -2131,13 +2159,18 @@ pub fn run() {
             restart_app,
             process_screenshot_ocr,
             convert_pdf_to_word,
+            read_pdf_file,
+            save_pdf_file,
             set_dialog_open,
             process_image,
             test_toast,
             finalize_capture,
-            cancel_capture
+            cancel_capture,
+            resize_window,
+            restore_window
         ])
         .setup(|app| {
+            let config: AppConfig = confy::load("mouse-crazy-app", None).unwrap_or_default();
             app.manage(AppState {
                 mouse_moving: std::sync::Mutex::new(false),
                 is_pet_mode: std::sync::Mutex::new(false),
@@ -2148,7 +2181,11 @@ pub fn run() {
                 shutdown_cancel_tx: tokio::sync::Mutex::new(None),
                 shutdown_target: tokio::sync::Mutex::new(None),
                 shutdown_duration: tokio::sync::Mutex::new(None),
-                last_tray_pos: tokio::sync::Mutex::new(None),
+                last_tray_pos: tokio::sync::Mutex::new(
+                    config
+                        .last_x
+                        .and_then(|x| config.last_y.map(|y| tauri::PhysicalPosition::new(x, y))),
+                ),
             });
 
             // Start global key listener for Triple-Tap Control
@@ -2163,8 +2200,17 @@ pub fn run() {
             // --- Initial Window Positioning ---
             if let Some(window) = app.get_webview_window("main") {
                 let window_clone = window.clone();
+                let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    if let Ok(Some(monitor)) = window_clone.current_monitor() {
+                    let state = handle.state::<AppState>();
+                    let initial_pos = {
+                        let lock = state.last_tray_pos.lock().await;
+                        *lock
+                    };
+
+                    if let Some(pos) = initial_pos {
+                        let _ = window_clone.set_position(pos);
+                    } else if let Ok(Some(monitor)) = window_clone.current_monitor() {
                         let monitor_size = monitor.size();
                         let scale_factor = monitor.scale_factor();
 
@@ -2181,10 +2227,16 @@ pub fn run() {
             }
             // ------------------------------------
 
-            let toggle_i =
-                MenuItem::<Wry>::with_id(app, "toggle", "Start Moving Mouse", true, None::<&str>)?;
-            let quit_i = MenuItem::<Wry>::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::<Wry>::with_items(app, &[&toggle_i, &quit_i])?;
+            let toggle_i = MenuItem::<Wry>::with_id(
+                app.handle(),
+                "toggle",
+                "Start Moving Mouse",
+                true,
+                None::<&str>,
+            )?;
+            let quit_i =
+                MenuItem::<Wry>::with_id(app.handle(), "quit", "Quit", true, None::<&str>)?;
+            let menu = Menu::<Wry>::with_items(app.handle(), &[&toggle_i, &quit_i])?;
 
             let toggle_item_clone = toggle_i.clone();
 
@@ -2260,8 +2312,20 @@ pub fn run() {
                                                 let x =
                                                     (position.x as i32) - (size.width as i32 / 2);
                                                 let pos = tauri::PhysicalPosition::new(x, 30);
-                                                let mut last_pos = state.last_tray_pos.lock().await;
-                                                *last_pos = Some(pos);
+                                                {
+                                                    let mut last_pos =
+                                                        state.last_tray_pos.lock().await;
+                                                    *last_pos = Some(pos);
+                                                }
+                                                // Persist to disk
+                                                let _ = confy::store(
+                                                    "mouse-crazy-app",
+                                                    None,
+                                                    AppConfig {
+                                                        last_x: Some(pos.x),
+                                                        last_y: Some(pos.y),
+                                                    },
+                                                );
                                                 let _ = window_clone.set_position(pos);
                                             }
                                             let _ = window_clone.show();
@@ -2274,8 +2338,19 @@ pub fn run() {
                                         if let Ok(size) = window_clone.outer_size() {
                                             let x = (position.x as i32) - (size.width as i32 / 2);
                                             let pos = tauri::PhysicalPosition::new(x, 30);
-                                            let mut last_pos = state.last_tray_pos.lock().await;
-                                            *last_pos = Some(pos);
+                                            {
+                                                let mut last_pos = state.last_tray_pos.lock().await;
+                                                *last_pos = Some(pos);
+                                            }
+                                            // Persist to disk
+                                            let _ = confy::store(
+                                                "mouse-crazy-app",
+                                                None,
+                                                AppConfig {
+                                                    last_x: Some(pos.x),
+                                                    last_y: Some(pos.y),
+                                                },
+                                            );
                                             let _ = window_clone.set_position(pos);
                                         }
                                         let _ = window_clone.show();
@@ -2294,6 +2369,23 @@ pub fn run() {
                 let window_clone = window.clone();
                 let app_handle = app.handle().clone();
                 window.on_window_event(move |event| match event {
+                    tauri::WindowEvent::Moved(pos) => {
+                        let app_handle = app_handle.clone();
+                        let p = *pos;
+                        tauri::async_runtime::spawn(async move {
+                            let state = app_handle.state::<AppState>();
+                            let mut last_pos = state.last_tray_pos.lock().await;
+                            *last_pos = Some(p);
+                            let _ = confy::store(
+                                "mouse-crazy-app",
+                                None,
+                                AppConfig {
+                                    last_x: Some(p.x),
+                                    last_y: Some(p.y),
+                                },
+                            );
+                        });
+                    }
                     tauri::WindowEvent::Focused(focused) => {
                         if !focused {
                             let state = app_handle.state::<AppState>();
@@ -2342,9 +2434,9 @@ pub fn run() {
                     None => return, // Silently exit if still fails after retries
                 };
 
-                let mut offset: i32 = 30; // 30px diagonal is very aggressive
+                let mut offset: i32 = 1; // 1px diagonal is enough to keep awake without interrupting use
                 loop {
-                    std::thread::sleep(Duration::from_millis(200)); // Faster interval
+                    std::thread::sleep(Duration::from_millis(2000)); // 2 second interval is plenty keep-awake
                     let state = app_handle.state::<AppState>();
                     let moving = if let Ok(lock) = state.mouse_moving.lock() {
                         *lock
@@ -2353,7 +2445,7 @@ pub fn run() {
                     };
 
                     if moving {
-                        // Diagonal movement is more robust
+                        // Diagonal movement is more robust, but just 1px
                         let _ = enigo.move_mouse(offset, offset, enigo::Coordinate::Rel);
                         offset = -offset;
                     }

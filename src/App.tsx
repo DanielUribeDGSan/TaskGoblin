@@ -12,6 +12,7 @@ import PetAgent from './components/PetAgent';
 import ColorExtractor from './components/ColorExtractor';
 import PaintBoard from './components/PaintBoard';
 import ImageConverter from './components/ImageConverter';
+import PdfEditor from './components/PdfEditor';
 import { translations, Language } from "./i18n/translations";
 import "./App.css";
 
@@ -198,6 +199,7 @@ function App() {
   const [showMainShutdownPicker, setShowMainShutdownPicker] = useState<boolean>(false);
   const [shouldCloseAppsOnShutdown, setShouldCloseAppsOnShutdown] = useState(false);
   const [isPaintActive, setIsPaintActive] = useState(false);
+  const [isPdfEditorActive, setIsPdfEditorActive] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const checkAccessibility = async () => {
     try {
@@ -634,6 +636,17 @@ function App() {
             t={t}
           />
         )}
+        {isPdfEditorActive && (
+          <PdfEditor
+            onClose={() => {
+              setIsPdfEditorActive(false);
+              invoke('resize_window', { width: 360.0, height: 580.0, center: true });
+              invoke('set_dialog_open', { open: false });
+            }}
+            showToast={showToast}
+            t={t}
+          />
+        )}
         <div
           className={`app-wrapper ${!isSidebarOpen ? 'sidebar-closed' : ''} ${isPetMode ? 'pet-mode-active' : ''} ${isPaintActive ? 'paint-mode-active' : ''}`}
         >
@@ -982,7 +995,7 @@ function App() {
                     {"pdf to word".includes(appSearchTerm.toLowerCase()) && (
                       <motion.div
                         className="list-item"
-                        onClick={handleConvertPdf}
+                        onClick={() => { setActiveTab("PdfTools"); setAppSearchTerm(""); }}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.3 }}
@@ -1420,6 +1433,72 @@ function App() {
                       <BackIcon /> <span style={{ marginLeft: '8px' }}>{t('common.back')}</span>
                     </div>
                     <ImageConverter showToast={showToast} t={t} />
+                  </motion.div>
+                )}
+
+                {activeTab === "PdfTools" && (
+                  <motion.div
+                    key="pdf-tools-tab"
+                    className="wa-form-container profiles-container"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                  >
+                    <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                      <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Back
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
+                      <div className="icon" style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <PdfIcon />
+                      </div>
+                      <h2 style={{ fontSize: '20px', margin: 0 }}>Smart PDF</h2>
+                    </div>
+                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: '1.5' }}>
+                      {t('pdf_tools.desc') || 'Select a tool to process your PDF files. You can either convert them to editable Word documents or natively draw signatures and add text.'}
+                    </p>
+
+                    <motion.div
+                      className="profile-mode-card"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.1 }}
+                      whileHover={{ scale: 1.01 }}
+                      style={{ marginBottom: '16px' }}
+                    >
+                      <div className="profile-mode-header">
+                        <span className="profile-mode-icon">📄</span>
+                        <span className="profile-mode-title">{t('pdf_tools.convert_title') || 'Convert to Word'}</span>
+                      </div>
+                      <div className="profile-mode-actions">
+                        <button type="button" className="profile-action-btn" onClick={handleConvertPdf} style={{ background: 'var(--accent-color)', color: '#fff', border: 'none' }}>
+                          {t('pdf_tools.convert_btn') || 'Select & Convert'}
+                        </button>
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      className="profile-mode-card"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 }}
+                      whileHover={{ scale: 1.01 }}
+                    >
+                      <div className="profile-mode-header">
+                        <span className="profile-mode-icon">🖋️</span>
+                        <span className="profile-mode-title">{t('pdf_tools.edit_title') || 'Edit & Sign Native PDF'}</span>
+                      </div>
+                      <div className="profile-mode-actions">
+                        <button type="button" className="profile-action-btn" onClick={() => {
+                          setIsPdfEditorActive(true);
+                          invoke('resize_window', { width: 1000.0, height: 800.0, center: true });
+                          invoke('set_dialog_open', { open: true });
+                        }}>
+                          {t('pdf_tools.edit_btn') || 'Open PDF Editor'}
+                        </button>
+                      </div>
+                    </motion.div>
                   </motion.div>
                 )}
               </AnimatePresence>
