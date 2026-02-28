@@ -26,7 +26,6 @@ impl Default for AppConfig {
 
 struct AppState {
     mouse_moving: std::sync::Mutex<bool>,
-    is_pet_mode: std::sync::Mutex<bool>,
     is_paint_mode: std::sync::Mutex<bool>,
     is_dialog_open: std::sync::Mutex<bool>,
     is_capturing: Arc<std::sync::Mutex<bool>>, // Arc so it can be cloned into threads
@@ -326,60 +325,10 @@ async fn repair_permissions(_app_handle: tauri::AppHandle) -> Result<(), String>
 
 #[tauri::command]
 fn restart_app(app_handle: tauri::AppHandle) {
-    tauri::process::restart(&app_handle.env());
+    app_handle.restart();
 }
 
-#[tauri::command]
-async fn toggle_pet_mode(
-    window: tauri::Window,
-    active: bool,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
-    {
-        let mut pet_mode = state.is_pet_mode.lock().map_err(|e| e.to_string())?;
-        *pet_mode = active;
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        if active {
-            // Manual "maximize" to avoid OS animation jitter
-            if let Ok(Some(monitor)) = window.current_monitor() {
-                let size = monitor.size();
-                let _ = window.set_resizable(true);
-                let _ = window.set_size(tauri::Size::Physical(*size));
-                let _ = window.set_position(tauri::PhysicalPosition::new(0, 0));
-                let _ = window.set_always_on_top(true);
-                let _ = window.set_ignore_cursor_events(true);
-            }
-        } else {
-            // Hide window during transition flip to avoid seeing the sidebar jump/slide
-            let _ = window.hide();
-
-            // Restore sidebar size
-            let _ = window.set_ignore_cursor_events(false);
-            let _ = window.set_resizable(false);
-            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(440.0, 820.0)));
-
-            // Force position restoration
-            let pos_lock = state.last_tray_pos.lock().await;
-            if let Some(pos) = *pos_lock {
-                let _ = window.set_position(tauri::Position::Physical(pos));
-            }
-
-            let _ = window.set_always_on_top(false);
-
-            // Show again once in place
-            let _ = window.show();
-            let _ = window.set_focus();
-        }
-        Ok(())
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        Err("Pet mode not supported on this OS".to_string())
-    }
-}
+// (Pet mode removed as per user request)
 
 #[tauri::command]
 async fn toggle_paint_mode(
@@ -387,6 +336,9 @@ async fn toggle_paint_mode(
     active: bool,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let _ = window;
+
     {
         let mut paint_mode = state.is_paint_mode.lock().map_err(|e| e.to_string())?;
         *paint_mode = active;
@@ -2143,7 +2095,6 @@ pub fn run() {
             request_accessibility,
             start_window_drag,
             repair_permissions,
-            toggle_pet_mode,
             toggle_paint_mode,
             set_ignore_cursor_events,
             close_all_apps,
@@ -2155,7 +2106,6 @@ pub fn run() {
             get_shutdown_time,
             extract_text_from_screen,
             write_to_clipboard,
-            repair_permissions,
             restart_app,
             process_screenshot_ocr,
             convert_pdf_to_word,
@@ -2173,7 +2123,6 @@ pub fn run() {
             let config: AppConfig = confy::load("mouse-crazy-app", None).unwrap_or_default();
             app.manage(AppState {
                 mouse_moving: std::sync::Mutex::new(false),
-                is_pet_mode: std::sync::Mutex::new(false),
                 is_paint_mode: std::sync::Mutex::new(false),
                 is_dialog_open: std::sync::Mutex::new(false),
                 is_capturing: Arc::new(std::sync::Mutex::new(false)),
@@ -2280,82 +2229,50 @@ pub fn run() {
 
                             tauri::async_runtime::spawn(async move {
                                 let state = app_handle.state::<AppState>();
-                                let (is_pet, is_paint) = {
-                                    let pet = *state
-                                        .is_pet_mode
-                                        .lock()
-                                        .unwrap_or_else(|e| e.into_inner());
-                                    let paint = *state
+                                let is_paint = {
+                                    *state
                                         .is_paint_mode
                                         .lock()
-                                        .unwrap_or_else(|e| e.into_inner());
-                                    (pet, paint)
+                                        .unwrap_or_else(|e| e.into_inner())
                                 };
-                                // Better check for locks below to avoid unwraps
 
-                                if is_pet || is_paint {
+                                if is_paint {
                                     // In special modes, we NEVER hide. We just show/focus which triggers App.tsx listener
                                     let _ = window_clone.set_ignore_cursor_events(false);
                                     let _ = window_clone.show();
                                     let _ = window_clone.set_focus();
                                     let _ = window_clone.emit("open-sidebar", ());
                                 } else {
-                                    // On macOS: toggle visibility (hide when shown, show when hidden)
-                                    // On Windows: always show/focus since the window stays in taskbar
                                     #[cfg(target_os = "macos")]
                                     {
                                         let is_visible = window_clone.is_visible().unwrap_or(false);
                                         if is_visible {
                                             let _ = window_clone.hide();
-                                        } else {
-                                            if let Ok(size) = window_clone.outer_size() {
-                                                let x =
-                                                    (position.x as i32) - (size.width as i32 / 2);
-                                                let pos = tauri::PhysicalPosition::new(x, 30);
-                                                {
-                                                    let mut last_pos =
-                                                        state.last_tray_pos.lock().await;
-                                                    *last_pos = Some(pos);
-                                                }
-                                                // Persist to disk
-                                                let _ = confy::store(
-                                                    "mouse-crazy-app",
-                                                    None,
-                                                    AppConfig {
-                                                        last_x: Some(pos.x),
-                                                        last_y: Some(pos.y),
-                                                    },
-                                                );
-                                                let _ = window_clone.set_position(pos);
-                                            }
-                                            let _ = window_clone.show();
-                                            let _ = window_clone.set_focus();
+                                            return;
                                         }
                                     }
-                                    #[cfg(not(target_os = "macos"))]
-                                    {
-                                        // On Windows, always bring to front
-                                        if let Ok(size) = window_clone.outer_size() {
-                                            let x = (position.x as i32) - (size.width as i32 / 2);
-                                            let pos = tauri::PhysicalPosition::new(x, 30);
-                                            {
-                                                let mut last_pos = state.last_tray_pos.lock().await;
-                                                *last_pos = Some(pos);
-                                            }
-                                            // Persist to disk
-                                            let _ = confy::store(
-                                                "mouse-crazy-app",
-                                                None,
-                                                AppConfig {
-                                                    last_x: Some(pos.x),
-                                                    last_y: Some(pos.y),
-                                                },
-                                            );
-                                            let _ = window_clone.set_position(pos);
+
+                                    // For Windows OR macOS when hidden: centering/repositioning logic
+                                    if let Ok(size) = window_clone.outer_size() {
+                                        let x = (position.x as i32) - (size.width as i32 / 2);
+                                        let pos = tauri::PhysicalPosition::new(x, 30);
+                                        {
+                                            let mut last_pos = state.last_tray_pos.lock().await;
+                                            *last_pos = Some(pos);
                                         }
-                                        let _ = window_clone.show();
-                                        let _ = window_clone.set_focus();
+                                        // Persist to disk
+                                        let _ = confy::store(
+                                            "mouse-crazy-app",
+                                            None,
+                                            AppConfig {
+                                                last_x: Some(pos.x),
+                                                last_y: Some(pos.y),
+                                            },
+                                        );
+                                        let _ = window_clone.set_position(pos);
                                     }
+                                    let _ = window_clone.show();
+                                    let _ = window_clone.set_focus();
                                 }
                             });
                         }
@@ -2389,8 +2306,6 @@ pub fn run() {
                     tauri::WindowEvent::Focused(focused) => {
                         if !focused {
                             let state = app_handle.state::<AppState>();
-                            let is_pet_mode =
-                                *state.is_pet_mode.lock().unwrap_or_else(|e| e.into_inner());
                             let is_paint_mode = *state
                                 .is_paint_mode
                                 .lock()
@@ -2400,7 +2315,7 @@ pub fn run() {
                                 .lock()
                                 .unwrap_or_else(|e| e.into_inner());
 
-                            if !is_pet_mode && !is_paint_mode && !is_dialog_open {
+                            if !is_paint_mode && !is_dialog_open {
                                 // On Windows: don't auto-hide (would remove from taskbar).
                                 // On macOS: hide normally.
                                 #[cfg(target_os = "macos")]
