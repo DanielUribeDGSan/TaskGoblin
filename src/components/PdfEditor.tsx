@@ -144,7 +144,7 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
     };
 
     // ----- Signature Pad -----
-    const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
+    const startDrawing = (_e: React.MouseEvent | React.TouchEvent) => {
         setIsDrawing(true);
         const ctx = signatureCanvasRef.current?.getContext("2d");
         if (ctx) {
@@ -275,18 +275,18 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
             // Send back to Tauri to Save to Disk - Pass the path explicitly
             try {
                 await writeFile(savePath, pdfBytes);
-                showToast("PDF Guardado con éxito");
+                showToast(t("pdf_tools.toast_saved"));
                 onClose(); // Close the editor after successful save
             } catch (err: any) {
                 console.error("Save error:", err);
-                showToast(`Error al guardar: ${err.message || err}`);
+                showToast(`${t("common.error")}: ${err.message || err}`);
             }
             // Removed onClose() to keep the editor open as requested
 
         } catch (err: any) {
             console.error("Error saving PDF: ", err);
             invoke("set_dialog_open", { open: false }).catch(() => { });
-            showToast(`Error al guardar PDF: ${err.message || err || "Error desconocido"}`);
+            showToast(`${t("common.error")}: ${err.message || err || "Error desconocido"}`);
         }
     };
 
@@ -303,7 +303,7 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
     if (!pdfData) {
         return (
             <div className="pdf-editor-overlay">
-                <div className="pdf-editor-loading">Loading PDF...</div>
+                <div className="pdf-editor-loading">{t("pdf_tools.loading")}</div>
             </div>
         )
     }
@@ -328,10 +328,10 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
                     letterSpacing: '0.5px'
                 }}
             >
-                ARRASTRA ESTA BARRA PARA MOVER LA VENTANA
+                {t("pdf_tools.drag_handle")}
             </div>
             <div className="pdf-toolbar" onClick={e => e.stopPropagation()}>
-                <button onClick={onClose} className="pdf-tool-btn">⬅ Salir</button>
+                <button onClick={onClose} className="pdf-tool-btn">⬅ {t("common.back")}</button>
 
                 <div className="pdf-toolbar-center">
                     <button onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}>◀</button>
@@ -345,8 +345,8 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
                     <button onClick={() => setScale(scale + 0.2)}>+</button>
 
                     <span style={{ margin: '0 16px' }}>|</span>
-                    <button onClick={() => setIsDrawingSignature(true)}>✒️ Firmar</button>
-                    <button onClick={addText} style={{ marginLeft: '8px' }}>📝 Añadir Texto</button>
+                    <button onClick={() => setIsDrawingSignature(true)}>{t("pdf_tools.sign")}</button>
+                    <button onClick={addText} style={{ marginLeft: '8px' }}>{t("pdf_tools.add_text")}</button>
                 </div>
 
                 <div className="pdf-toolbar-right" style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
@@ -362,7 +362,7 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
                             <input type="color" value={texts.find(t => t.id === selectedId)?.color || "#000000"} onChange={e => updateText(selectedId, { color: e.target.value })} style={{ width: 30, height: 30, padding: 0, border: 'none', background: 'transparent' }} />
                         </div>
                     )}
-                    <button onClick={handleSavePdf} className="pdf-tool-btn save">Guardar PDF</button>
+                    <button onClick={handleSavePdf} className="pdf-tool-btn save">{t("pdf_tools.save_pdf")}</button>
                 </div>
             </div>
 
@@ -371,27 +371,27 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
                     <canvas ref={canvasRef} style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
 
                     {/* Overlay Texts */}
-                    {texts.map(t => (
-                        <div key={t.id} style={{
+                    {texts.map(tItem => (
+                        <div key={tItem.id} style={{
                             position: 'absolute',
-                            left: t.x * scale,
-                            top: t.y * scale,
-                            border: selectedId === t.id ? '2px solid #007bff' : '1px dashed #ccc',
+                            left: tItem.x * scale,
+                            top: tItem.y * scale,
+                            border: selectedId === tItem.id ? '2px solid #007bff' : '1px dashed #ccc',
                             backgroundColor: 'transparent',
                             cursor: 'move',
                             boxSizing: 'border-box'
                         }}
-                            onClick={(e) => { e.stopPropagation(); setSelectedId(t.id); }}
+                            onClick={(e) => { e.stopPropagation(); setSelectedId(tItem.id); }}
                             onMouseDown={(e) => {
                                 if ((e.target as HTMLElement).tagName.toLowerCase() === 'textarea' && document.activeElement === e.target) return;
                                 if ((e.target as HTMLElement).classList.contains('resize-handle')) return;
 
-                                const startX = e.clientX - (t.x * scale);
-                                const startY = e.clientY - (t.y * scale);
+                                const startX = e.clientX - (tItem.x * scale);
+                                const startY = e.clientY - (tItem.y * scale);
 
                                 const onMouseMove = (moveEvent: MouseEvent) => {
                                     setTexts(prev => prev.map(textItem =>
-                                        textItem.id === t.id ? {
+                                        textItem.id === tItem.id ? {
                                             ...textItem,
                                             x: (moveEvent.clientX - startX) / scale,
                                             y: (moveEvent.clientY - startY) / scale
@@ -408,12 +408,12 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
                                 document.addEventListener('mouseup', onMouseUp);
                             }}
                         >
-                            {selectedId === t.id && (
-                                <button onClick={(e) => { e.stopPropagation(); removeText(t.id); }} style={{ position: 'absolute', top: -12, right: -12, background: 'red', color: 'white', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: 12, zIndex: 20 }}>x</button>
+                            {selectedId === tItem.id && (
+                                <button onClick={(e) => { e.stopPropagation(); removeText(tItem.id); }} style={{ position: 'absolute', top: -12, right: -12, background: 'red', color: 'white', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: 12, zIndex: 20 }}>x</button>
                             )}
                             <textarea
                                 autoFocus
-                                value={t.text}
+                                value={tItem.text}
                                 onChange={e => {
                                     const target = e.target as HTMLTextAreaElement;
                                     // Set height to 1px temporarily to get correct scrollHeight
@@ -421,19 +421,19 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
                                     const newHeight = target.scrollHeight;
                                     target.style.height = `${newHeight}px`;
 
-                                    updateText(t.id, {
+                                    updateText(tItem.id, {
                                         text: target.value,
                                         height: newHeight / scale
                                     });
                                 }}
-                                placeholder="Escribe..."
+                                placeholder={t("pdf_tools.write_placeholder")}
                                 style={{
-                                    fontSize: `${t.fontSize * scale}px`,
-                                    color: t.color,
+                                    fontSize: `${tItem.fontSize * scale}px`,
+                                    color: tItem.color,
                                     border: 'none',
                                     outline: 'none',
-                                    width: `${t.width * scale}px`,
-                                    height: `${t.height * scale}px`,
+                                    width: `${tItem.width * scale}px`,
+                                    height: `${tItem.height * scale}px`,
                                     background: 'transparent',
                                     resize: 'none',
                                     cursor: 'text',
@@ -460,9 +460,9 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
                                 onMouseDown={(e) => {
                                     e.stopPropagation();
                                     const startX = e.clientX;
-                                    const startWidth = t.width;
-                                    const startHeight = t.height;
-                                    const startFontSize = t.fontSize;
+                                    const startWidth = tItem.width;
+                                    const startHeight = tItem.height;
+                                    const startFontSize = tItem.fontSize;
 
                                     const onMouseMove = (moveEvent: MouseEvent) => {
                                         const delta = (moveEvent.clientX - startX) / scale;
@@ -472,7 +472,7 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
                                         const newFontSize = startFontSize * ratio;
 
                                         setTexts(prev => prev.map(textItem =>
-                                            textItem.id === t.id ? {
+                                            textItem.id === tItem.id ? {
                                                 ...textItem,
                                                 width: newWidth,
                                                 height: newHeight,
@@ -538,7 +538,7 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
             {isDrawingSignature && (
                 <div className="signature-modal-overlay">
                     <div className="signature-modal">
-                        <h3>Dibuja tu firma</h3>
+                        <h3>{t("pdf_tools.draw_signature")}</h3>
                         <canvas
                             ref={signatureCanvasRef}
                             width={400}
@@ -553,8 +553,8 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
                             onTouchEnd={stopDrawing}
                         />
                         <div style={{ marginTop: '16px', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                            <button onClick={() => setIsDrawingSignature(false)}>Cancelar</button>
-                            <button onClick={saveSignature} style={{ background: 'var(--accent-color)', color: 'white' }}>Insertar Firma</button>
+                            <button onClick={() => setIsDrawingSignature(false)}>{t("common.cancel")}</button>
+                            <button onClick={saveSignature} style={{ background: 'var(--accent-color)', color: 'white' }}>{t("pdf_tools.insert_signature")}</button>
                         </div>
                     </div>
                 </div>
