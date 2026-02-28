@@ -2166,7 +2166,7 @@ pub fn run() {
                         let scale_factor = monitor.scale_factor();
 
                         // Default to top-right corner if no tray pos yet
-                        let sidebar_width_logical = 440.0;
+                        let sidebar_width_logical = 360.0;
                         let sidebar_width_physical = (sidebar_width_logical * scale_factor) as i32;
 
                         let x = monitor_size.width as i32 - sidebar_width_physical - 20; // 20px padding from right
@@ -2174,6 +2174,9 @@ pub fn run() {
 
                         let _ = window_clone.set_position(pos);
                     }
+                    // Explicitly show and focus after positioning to avoid the "jump"
+                    let _ = window_clone.show();
+                    let _ = window_clone.set_focus();
                 });
             }
             // ------------------------------------
@@ -2255,8 +2258,11 @@ pub fn run() {
                                     }
 
                                     // For Windows OR macOS when hidden: centering/repositioning logic
-                                    if let Ok(size) = window_clone.outer_size() {
-                                        let x = (position.x as i32) - (size.width as i32 / 2);
+                                    if let Ok(Some(monitor)) = window_clone.current_monitor() {
+                                        let scale_factor = monitor.scale_factor();
+                                        let sidebar_width_physical = (360.0 * scale_factor) as i32;
+
+                                        let x = (position.x as i32) - (sidebar_width_physical / 2);
                                         let pos = tauri::PhysicalPosition::new(x, 30);
                                         {
                                             let mut last_pos = state.last_tray_pos.lock().await;
@@ -2291,18 +2297,36 @@ pub fn run() {
                     tauri::WindowEvent::Moved(pos) => {
                         let app_handle = app_handle.clone();
                         let p = *pos;
+                        let w = window_clone.clone();
                         tauri::async_runtime::spawn(async move {
-                            let state = app_handle.state::<AppState>();
-                            let mut last_pos = state.last_tray_pos.lock().await;
-                            *last_pos = Some(p);
-                            let _ = confy::store(
-                                "mouse-crazy-app",
-                                None,
-                                AppConfig {
-                                    last_x: Some(p.x),
-                                    last_y: Some(p.y),
-                                },
-                            );
+                            // Only save position if window is in standard sidebar size (approximate check to allow for small deviations)
+                            if let Ok(size) = w.outer_size() {
+                                if let Ok(Some(monitor)) = w.current_monitor() {
+                                    let scale = monitor.scale_factor();
+                                    let expected_width = (360.0 * scale) as u32;
+                                    let expected_height = (580.0 * scale) as u32;
+
+                                    // Allow some tolerance for decorations/rounding
+                                    let is_standard_size =
+                                        (size.width as i32 - expected_width as i32).abs() < 50
+                                            && (size.height as i32 - expected_height as i32).abs()
+                                                < 50;
+
+                                    if is_standard_size {
+                                        let state = app_handle.state::<AppState>();
+                                        let mut last_pos = state.last_tray_pos.lock().await;
+                                        *last_pos = Some(p);
+                                        let _ = confy::store(
+                                            "mouse-crazy-app",
+                                            None,
+                                            AppConfig {
+                                                last_x: Some(p.x),
+                                                last_y: Some(p.y),
+                                            },
+                                        );
+                                    }
+                                }
+                            }
                         });
                     }
                     tauri::WindowEvent::Focused(focused) => {

@@ -135,8 +135,8 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
             text: "",
             fontSize: 24,
             color: "#000000",
-            width: 150,
-            height: 24
+            width: 50, // Smaller initial width, will grow
+            height: 28
         };
         setTexts([...texts, newText]);
         setSelectedId(newText.id);
@@ -424,13 +424,26 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
                                 value={tItem.text}
                                 onChange={e => {
                                     const target = e.target as HTMLTextAreaElement;
-                                    // Set height to 1px temporarily to get correct scrollHeight
+
+                                    // Auto-resize width based on content
+                                    const tempSpan = document.createElement('span');
+                                    tempSpan.style.font = `${tItem.fontSize * scale}px sans-serif`;
+                                    tempSpan.style.visibility = 'hidden';
+                                    tempSpan.style.position = 'absolute';
+                                    tempSpan.style.whiteSpace = 'pre';
+                                    tempSpan.innerText = target.value || ' ';
+                                    document.body.appendChild(tempSpan);
+                                    const newWidth = (tempSpan.getBoundingClientRect().width + 10) / scale;
+                                    document.body.removeChild(tempSpan);
+
+                                    // Auto-resize height
                                     target.style.height = '1px';
                                     const newHeight = target.scrollHeight;
                                     target.style.height = `${newHeight}px`;
 
                                     updateText(tItem.id, {
                                         text: target.value,
+                                        width: newWidth,
                                         height: newHeight / scale
                                     });
                                 }}
@@ -508,10 +521,12 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
                             left: s.x * scale,
                             top: s.y * scale,
                             cursor: 'move',
-                            border: selectedId === s.id ? '2px solid #007bff' : '1px dashed transparent'
+                            border: selectedId === s.id ? '2px solid #007bff' : '1px dashed transparent',
+                            boxSizing: 'border-box'
                         }}
                             onClick={(e) => { e.stopPropagation(); setSelectedId(s.id); }}
                             onMouseDown={(e) => {
+                                if ((e.target as HTMLElement).classList.contains('resize-handle')) return;
                                 const startX = e.clientX - (s.x * scale);
                                 const startY = e.clientY - (s.y * scale);
 
@@ -535,9 +550,56 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
                             }}
                         >
                             {selectedId === s.id && (
-                                <button onClick={(e) => { e.stopPropagation(); setSignatures(prev => prev.filter(sig => sig.id !== s.id)); }} style={{ position: 'absolute', top: -12, right: -12, background: 'red', color: 'white', border: 'none', borderRadius: '50%', width: 20, height: 20, cursor: 'pointer', fontSize: 10, zIndex: 20 }}>x</button>
+                                <>
+                                    <button onClick={(e) => { e.stopPropagation(); setSignatures(prev => prev.filter(sig => sig.id !== s.id)); }} style={{ position: 'absolute', top: -12, right: -12, background: 'red', color: 'white', border: 'none', borderRadius: '50%', width: 20, height: 20, cursor: 'pointer', fontSize: 10, zIndex: 20 }}>x</button>
+                                    {/* Resize Handle for Signatures */}
+                                    <div
+                                        className="resize-handle"
+                                        style={{
+                                            position: 'absolute',
+                                            bottom: -5,
+                                            right: -5,
+                                            width: 10,
+                                            height: 10,
+                                            background: '#007bff',
+                                            cursor: 'nwse-resize',
+                                            zIndex: 30,
+                                            borderRadius: '2px'
+                                        }}
+                                        onMouseDown={(e) => {
+                                            e.stopPropagation();
+                                            const startX = e.clientX;
+                                            const startWidth = s.width;
+                                            const startHeight = s.height;
+
+                                            const onMouseMove = (moveEvent: MouseEvent) => {
+                                                const delta = (moveEvent.clientX - startX) / scale;
+                                                const newWidth = Math.max(30, startWidth + delta);
+                                                // Maintain aspect ratio for signatures
+                                                const ratio = newWidth / startWidth;
+                                                const newHeight = startHeight * ratio;
+
+                                                setSignatures(prev => prev.map(sig =>
+                                                    sig.id === s.id ? {
+                                                        ...sig,
+                                                        width: newWidth,
+                                                        height: newHeight
+                                                    } : sig
+                                                ));
+                                            };
+
+                                            const onMouseUp = () => {
+                                                document.removeEventListener('mousemove', onMouseMove);
+                                                document.removeEventListener('mouseup', onMouseUp);
+                                            };
+
+                                            document.addEventListener('mousemove', onMouseMove);
+                                            document.addEventListener('mouseup', onMouseUp);
+                                        }}
+                                    />
+                                </>
                             )}
-                            <img src={s.dataUrl} width={s.width * scale} height={s.height * scale} alt="Signature" style={{ pointerEvents: 'none' }} />
+                            <img src={s.dataUrl} width={s.width * scale} height={s.height * scale} alt="Signature" style={{ pointerEvents: 'none', display: 'block' }} />
                         </div>
                     ))}
                 </div>

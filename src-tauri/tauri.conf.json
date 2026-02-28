@@ -17,7 +17,7 @@
         "width": 360,
         "height": 580,
         "resizable": false,
-        "visible": true,
+        "visible": false,
         "hiddenTitle": false,
         "decorations": false,
         "transparent": true,
