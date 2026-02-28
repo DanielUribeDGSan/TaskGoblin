@@ -366,7 +366,7 @@ async fn toggle_paint_mode(
             // Restore sidebar size
             let _ = window.set_ignore_cursor_events(false);
             let _ = window.set_resizable(false);
-            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(440.0, 820.0)));
+            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(360.0, 580.0)));
 
             // Force position restoration
             let pos_lock = state.last_tray_pos.lock().await;
@@ -401,7 +401,7 @@ async fn toggle_paint_mode(
             let _ = window.set_always_on_top(false);
             let _ = window.set_resizable(false);
             let _ = window.set_decorations(false);
-            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(440.0, 820.0)));
+            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(360.0, 580.0)));
 
             // Restore last position
             let pos_lock = state.last_tray_pos.lock().await;
@@ -2069,7 +2069,7 @@ async fn resize_window(
 #[tauri::command]
 async fn restore_window(window: tauri::Window, state: State<'_, AppState>) -> Result<(), String> {
     let _ = window.set_resizable(false);
-    let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(440.0, 820.0)));
+    let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(360.0, 580.0)));
     let pos_lock = state.last_tray_pos.lock().await;
     if let Some(pos) = *pos_lock {
         let _ = window.set_position(tauri::Position::Physical(pos));

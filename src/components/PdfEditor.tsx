@@ -5,8 +5,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 
-// Configure worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// Configure worker - Use unpkg for more reliability in production
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
 
 interface OverlayText {
     id: string;
@@ -53,11 +53,13 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
 
     // Load PDF when component mounts
     useEffect(() => {
+        console.log("PdfEditor: Mounted, calling pickPdfFile");
         pickPdfFile();
     }, []);
 
     const pickPdfFile = async () => {
         try {
+            console.log("PdfEditor: Opening file picker...");
             await invoke("set_dialog_open", { open: true });
             const selected = await open({
                 multiple: false,
@@ -67,23 +69,29 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
                 }]
             });
             await invoke("set_dialog_open", { open: false });
+            console.log("PdfEditor: File picker closed, selected:", selected);
 
             if (selected && typeof selected === 'string') {
+                console.log("PdfEditor: Reading PDF file from path:", selected);
                 const data: number[] = await invoke("read_pdf_file", { path: selected });
+                console.log("PdfEditor: PDF file read, bytes length:", data.length);
                 const uint8Array = new Uint8Array(data);
                 // Important: Clone the data to avoid buffer detachment if pdf.js takes stewardship
                 setPdfData(new Uint8Array(uint8Array));
 
+                console.log("PdfEditor: Loading document into pdf.js...");
                 const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
                 const doc = await loadingTask.promise;
+                console.log("PdfEditor: Document loaded successfully, pages:", doc.numPages);
                 setPdfDoc(doc);
                 setNumPages(doc.numPages);
                 setCurrentPage(1);
             } else {
+                console.log("PdfEditor: No file selected or cancelled");
                 onClose(); // Cancelled
             }
         } catch (err) {
-            console.error("Failed to pick PDF", err);
+            console.error("PdfEditor: Failed to pick PDF", err);
             invoke("set_dialog_open", { open: false }).catch(() => { });
             // Fallback close
             onClose();
