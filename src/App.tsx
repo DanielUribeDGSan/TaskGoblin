@@ -84,12 +84,10 @@ interface PermissionStatus {
 const PermissionGuide = ({
   status,
   onRetry,
-  language,
   t
 }: {
   status: PermissionStatus,
   onRetry: () => void,
-  language: Language,
   t: (key: string) => string
 }) => {
   const needsAny = !status.accessibility || !status.screen_recording || !status.contacts;
@@ -333,7 +331,6 @@ function App() {
     contacts: true
   });
   const [showPermissionGuide, setShowPermissionGuide] = useState(false);
-  const [isWaitingForPermission, setIsWaitingForPermission] = useState(false);
   const checkAccessibility = async () => {
     try {
       const isEnabled = await invoke("check_accessibility");
@@ -737,12 +734,10 @@ function App() {
 
       const isEnabled = await checkAccessibility();
       if (!isEnabled) {
-        setIsWaitingForPermission(true);
         showToast(t('permissions.waiting'));
         await requestAccessibility();
         // Wait up to 60 seconds for user to grant permission
         const granted = await invoke("wait_for_accessibility", { timeoutSecs: 60 }) as boolean;
-        setIsWaitingForPermission(false);
         if (!granted) {
           showToast(t('accessibility.toast_required'));
           return;
@@ -789,7 +784,6 @@ function App() {
     } catch (err) {
       console.error(err);
       showToast(t('common.error') + ": " + err);
-      setIsWaitingForPermission(false);
     }
   };
 
@@ -1864,7 +1858,6 @@ function App() {
                 console.error(err);
               }
             }}
-            language={language}
             t={t}
           />
         )}
