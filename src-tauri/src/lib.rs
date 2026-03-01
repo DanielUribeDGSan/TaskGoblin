@@ -277,6 +277,94 @@ fn request_accessibility() -> Result<(), String> {
 }
 
 #[tauri::command]
+fn check_screen_recording() -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    {
+        // Simple way to check if we can get window info which is gated by Screen Recording
+        use std::process::Command;
+        let script =
+            "tell application \"System Events\" to get name of window 1 of process \"Finder\"";
+        let output = Command::new("osascript").arg("-e").arg(script).output();
+
+        match output {
+            Ok(out) => {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                if stderr.contains("not allowed") || stderr.contains("denied") {
+                    return Ok(false);
+                }
+                // If it succeeds or has a different error, it might be allowed but Finder has no windows
+                // A better check for macOS 10.15+ is CGPreflightScreenCaptureAccess
+                extern "C" {
+                    fn CGPreflightScreenCaptureAccess() -> bool;
+                }
+                unsafe { Ok(CGPreflightScreenCaptureAccess()) }
+            }
+            Err(_) => Ok(false),
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(true)
+    }
+}
+
+#[tauri::command]
+fn check_contacts() -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        // Check if we can access contacts via AppleScript
+        let script = "tell application \"Contacts\" to count every person";
+        let output = Command::new("osascript").arg("-e").arg(script).output();
+        match output {
+            Ok(out) => {
+                let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                if stderr.contains("not allowed") || stderr.contains("denied") {
+                    return Ok(false);
+                }
+                Ok(stdout.parse::<i32>().is_ok())
+            }
+            Err(_) => Ok(false),
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(true)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct PermissionStatus {
+    accessibility: bool,
+    screen_recording: bool,
+    contacts: bool,
+}
+
+#[tauri::command]
+fn check_all_permissions() -> Result<PermissionStatus, String> {
+    Ok(PermissionStatus {
+        accessibility: check_accessibility()?,
+        screen_recording: check_screen_recording()?,
+        contacts: check_contacts()?,
+    })
+}
+
+#[tauri::command]
+async fn wait_for_accessibility(timeout_secs: u64) -> Result<bool, String> {
+    let start = Instant::now();
+    let timeout = Duration::from_secs(timeout_secs);
+
+    while start.elapsed() < timeout {
+        if check_accessibility()? {
+            return Ok(true);
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    Ok(false)
+}
+
+#[tauri::command]
 fn start_window_drag(window: tauri::Window) {
     let _ = window.start_dragging();
 }
@@ -435,7 +523,7 @@ async fn close_all_apps() -> Result<(), String> {
                 set activeProcs to every application process where background only is false
                 repeat with proc in activeProcs
                     set pName to name of proc
-                    if pName is not in appsToKeep then
+                    if pName is not in appsToKeep and pName does not contain "TaskGoblin" and pName does not contain "island" then
                         try
                             set bundleId to bundle identifier of proc
                             if bundleId is not missing value then
@@ -1689,6 +1777,83 @@ fn notify_user<R: tauri::Runtime>(app: &tauri::AppHandle<R>, _title: &str, messa
 }
 
 #[tauri::command]
+async fn save_paint_capture(app_handle: tauri::AppHandle) -> Result<(), String> {
+    use std::process::Command;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use tauri::Manager;
+
+    let downloads_dir = app_handle
+        .path()
+        .download_dir()
+        .map_err(|e| format!("Could not find downloads directory: {}", e))?;
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+
+    let timestamp = now.as_secs();
+
+    let filename = format!("TaskGoblin_Capture_{}.png", timestamp);
+    let save_path = downloads_dir.join(filename);
+    let save_path_str = save_path.to_string_lossy().to_string();
+
+    #[cfg(target_os = "macos")]
+    {
+        // -x = no sound
+        let output = Command::new("screencapture")
+            .arg("-x")
+            .arg(&save_path_str)
+            .output()
+            .map_err(|e| format!("Failed to capture screen: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Screencapture failed: {}", stderr));
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // Use PowerShell to capture the primary screen
+        // We need to add System.Windows.Forms to get Screen bounds
+        let ps_script = format!(
+            r#"
+            $ErrorActionPreference = 'Stop'
+            Add-Type -AssemblyName System.Drawing
+            Add-Type -AssemblyName System.Windows.Forms
+            $screen = [System.Windows.Forms.Screen]::PrimaryScreen
+            $width = $screen.Bounds.Width
+            $height = $screen.Bounds.Height
+            $left = $screen.Bounds.Left
+            $top = $screen.Bounds.Top
+            $bmp = New-Object System.Drawing.Bitmap($width, $height)
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($left, $top, 0, 0, $bmp.Size)
+            $bmp.Save('{}', [System.Drawing.Imaging.ImageFormat]::Png)
+            $g.Dispose()
+            $bmp.Dispose()
+            "#,
+            save_path_str.replace("'", "''") // Escape single quotes for PowerShell
+        );
+
+        let output = Command::new("powershell")
+            .arg("-NoProfile")
+            .arg("-NonInteractive")
+            .arg("-Command")
+            .arg(ps_script)
+            .output()
+            .map_err(|e| format!("Failed to capture screen on Windows: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("PowerShell capture failed: {}", stderr));
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 fn test_toast(app: tauri::AppHandle) {
     notify_user(&app, "Test Toast", "Esta es una notificación de prueba");
 }
@@ -1938,29 +2103,22 @@ async fn cancel_capture(
 }
 
 #[tauri::command]
-async fn process_screenshot_ocr(window: tauri::WebviewWindow) -> Result<(), String> {
-    let app_handle = window.app_handle().clone();
+async fn process_screenshot_ocr(window: tauri::WebviewWindow) -> Result<String, String> {
     match extract_text_from_screen(window).await {
         Ok(text) => {
             if text.trim().is_empty() {
-                notify_user(&app_handle, "OCR", "No text found in selection.");
-                return Ok(());
+                return Ok("NO_TEXT".to_string());
             }
 
             // Copy to clipboard
             if let Err(e) = write_to_clipboard(text.clone()).await {
-                notify_user(&app_handle, "OCR Error", &format!("Failed to copy: {}", e));
-                return Err(e);
+                return Err(format!("CLIPBOARD_ERROR:{}", e));
             }
 
-            // Success Notification
-            notify_user(&app_handle, "Text Copied!", "Copied content");
-            Ok(())
+            // Return text on success
+            Ok(text)
         }
-        Err(e) => {
-            notify_user(&app_handle, "OCR Failed", &e);
-            Err(e)
-        }
+        Err(e) => Err(e),
     }
 }
 
@@ -2094,6 +2252,10 @@ pub fn run() {
             open_contact_settings,
             open_accessibility_settings,
             check_accessibility,
+            check_screen_recording,
+            check_contacts,
+            check_all_permissions,
+            wait_for_accessibility,
             request_accessibility,
             start_window_drag,
             repair_permissions,
@@ -2115,6 +2277,7 @@ pub fn run() {
             save_pdf_file,
             set_dialog_open,
             process_image,
+            save_paint_capture,
             test_toast,
             finalize_capture,
             cancel_capture,

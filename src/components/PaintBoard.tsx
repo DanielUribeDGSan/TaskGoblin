@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
+import { invoke } from "@tauri-apps/api/core";
 
 interface Point {
     x: number;
@@ -126,7 +127,7 @@ const PaintPropertiesPanel = memo(function PaintPropertiesPanel({
     );
 });
 
-const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => string }) => {
+const PaintBoard = ({ onClose, t, showToast }: { onClose: () => void, t: (key: string) => string, showToast: (msg: string) => void }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const canvasPreviewRef = useRef<HTMLCanvasElement>(null);
     const elementsRef = useRef<PaintElement[]>([]);
@@ -145,6 +146,7 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
     const [resizeHandle, setResizeHandle] = useState<ResizeHandle>(null);
     const [isPanelVisible, setIsPanelVisible] = useState(true);
     const [textInput, setTextInput] = useState('');
+    const [isCaptureHidingToolbar, setIsCaptureHidingToolbar] = useState(false);
     const lastMousePos = useRef<Point>({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
 
     const getResizeHandle = (x: number, y: number, el: PaintElement): ResizeHandle => {
@@ -423,6 +425,22 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
         onClose();
     };
 
+    const handleCapture = async () => {
+        try {
+            setIsCaptureHidingToolbar(true);
+            // Wait for UI to hide
+            await new Promise(resolve => setTimeout(resolve, 300));
+            // Important: lib.rs expects tauri invoke to handle the screenshot
+            await invoke("save_paint_capture");
+            showToast(t('paint.capture_success'));
+        } catch (err) {
+            console.error("Capture error:", err);
+            showToast(t('paint.capture_error'));
+        } finally {
+            setIsCaptureHidingToolbar(false);
+        }
+    };
+
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -581,25 +599,28 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
     const paintUI = (
         <div className="paint-portal-root">
             <div className={`paint-container tool-${tool}`} data-paint-root>
-                <div className="paint-toolbar-wrapper">
-                    <div className="paint-toolbar">
-                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'pencil' ? 'active' : ''}`} onClick={() => setTool('pencil')} onKeyDown={(e) => e.key === 'Enter' && setTool('pencil')} title={t('paint.pencil')}>✏️</div>
-                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'pen' ? 'active' : ''}`} onClick={() => setTool('pen')} onKeyDown={(e) => e.key === 'Enter' && setTool('pen')} title={t('paint.pen')}>✒️</div>
-                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'marker' ? 'active' : ''}`} onClick={() => setTool('marker')} onKeyDown={(e) => e.key === 'Enter' && setTool('marker')} title={t('paint.marker')}>🖊️</div>
-                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'brush' ? 'active' : ''}`} onClick={() => setTool('brush')} onKeyDown={(e) => e.key === 'Enter' && setTool('brush')} title={t('paint.brush')}>🖌️</div>
-                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'eraser' ? 'active' : ''}`} onClick={() => setTool('eraser')} onKeyDown={(e) => e.key === 'Enter' && setTool('eraser')} title={t('paint.eraser')}>🧽</div>
-                        <div className="toolbar-divider"></div>
-                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'text' ? 'active' : ''}`} onClick={() => setTool('text')} onKeyDown={(e) => e.key === 'Enter' && setTool('text')} title={t('paint.text')}>A</div>
-                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'rect' ? 'active' : ''}`} onClick={() => setTool('rect')} onKeyDown={(e) => e.key === 'Enter' && setTool('rect')} title={t('paint.rect')}>□</div>
-                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'circle' ? 'active' : ''}`} onClick={() => setTool('circle')} onKeyDown={(e) => e.key === 'Enter' && setTool('circle')} title={t('paint.circle')}>○</div>
-                        <div role="button" tabIndex={0} className={`tool-btn ${tool === 'move' ? 'active' : ''}`} onClick={() => setTool('move')} onKeyDown={(e) => e.key === 'Enter' && setTool('move')} title={t('paint.move')}>🖐️</div>
-                        <div className="toolbar-divider"></div>
-                        <div role="button" tabIndex={0} className="tool-btn danger" onClick={clearAll} onKeyDown={(e) => e.key === 'Enter' && clearAll()} title={t('paint.clear_all')}>🗑️</div>
-                        <div role="button" tabIndex={0} className="tool-btn" onClick={closePaint} onKeyDown={(e) => e.key === 'Enter' && closePaint()} title={t('paint.close')}>✕</div>
+                {!isCaptureHidingToolbar && (
+                    <div className="paint-toolbar-wrapper">
+                        <div className="paint-toolbar">
+                            <div role="button" tabIndex={0} className={`tool-btn ${tool === 'pencil' ? 'active' : ''}`} onClick={() => setTool('pencil')} onKeyDown={(e) => e.key === 'Enter' && setTool('pencil')} title={t('paint.pencil')}>✏️</div>
+                            <div role="button" tabIndex={0} className={`tool-btn ${tool === 'pen' ? 'active' : ''}`} onClick={() => setTool('pen')} onKeyDown={(e) => e.key === 'Enter' && setTool('pen')} title={t('paint.pen')}>✒️</div>
+                            <div role="button" tabIndex={0} className={`tool-btn ${tool === 'marker' ? 'active' : ''}`} onClick={() => setTool('marker')} onKeyDown={(e) => e.key === 'Enter' && setTool('marker')} title={t('paint.marker')}>🖊️</div>
+                            <div role="button" tabIndex={0} className={`tool-btn ${tool === 'brush' ? 'active' : ''}`} onClick={() => setTool('brush')} onKeyDown={(e) => e.key === 'Enter' && setTool('brush')} title={t('paint.brush')}>🖌️</div>
+                            <div role="button" tabIndex={0} className={`tool-btn ${tool === 'eraser' ? 'active' : ''}`} onClick={() => setTool('eraser')} onKeyDown={(e) => e.key === 'Enter' && setTool('eraser')} title={t('paint.eraser')}>🧽</div>
+                            <div className="toolbar-divider"></div>
+                            <div role="button" tabIndex={0} className={`tool-btn ${tool === 'text' ? 'active' : ''}`} onClick={() => setTool('text')} onKeyDown={(e) => e.key === 'Enter' && setTool('text')} title={t('paint.text')}>A</div>
+                            <div role="button" tabIndex={0} className={`tool-btn ${tool === 'rect' ? 'active' : ''}`} onClick={() => setTool('rect')} onKeyDown={(e) => e.key === 'Enter' && setTool('rect')} title={t('paint.rect')}>□</div>
+                            <div role="button" tabIndex={0} className={`tool-btn ${tool === 'circle' ? 'active' : ''}`} onClick={() => setTool('circle')} onKeyDown={(e) => e.key === 'Enter' && setTool('circle')} title={t('paint.circle')}>○</div>
+                            <div role="button" tabIndex={0} className={`tool-btn ${tool === 'move' ? 'active' : ''}`} onClick={() => setTool('move')} onKeyDown={(e) => e.key === 'Enter' && setTool('move')} title={t('paint.move')}>🖐️</div>
+                            <div className="toolbar-divider"></div>
+                            <div role="button" tabIndex={0} className="tool-btn" onClick={handleCapture} onKeyDown={(e) => e.key === 'Enter' && handleCapture()} title={t('paint.capture')}>📸</div>
+                            <div role="button" tabIndex={0} className="tool-btn danger" onClick={clearAll} onKeyDown={(e) => e.key === 'Enter' && clearAll()} title={t('paint.clear_all')}>🗑️</div>
+                            <div role="button" tabIndex={0} className="tool-btn" onClick={closePaint} onKeyDown={(e) => e.key === 'Enter' && closePaint()} title={t('paint.close')}>✕</div>
+                        </div>
                     </div>
-                </div>
+                )}
 
-                {!isPanelVisible && (
+                {!isPanelVisible && !isCaptureHidingToolbar && (
                     <button className="show-panel-btn" onClick={() => setIsPanelVisible(true)} title={t('paint.show_panel')}>🎨</button>
                 )}
 
@@ -618,7 +639,7 @@ const PaintBoard = ({ onClose, t }: { onClose: () => void, t: (key: string) => s
     return (
         <>
             {createPortal(paintUI, document.body)}
-            {isPanelVisible && createPortal(
+            {isPanelVisible && !isCaptureHidingToolbar && createPortal(
                 <PaintPropertiesPanel
                     color={color}
                     setColor={setColor}

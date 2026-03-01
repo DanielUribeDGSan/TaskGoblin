@@ -75,6 +75,92 @@ interface Contact {
   phone: string;
 }
 
+interface PermissionStatus {
+  accessibility: boolean;
+  screen_recording: boolean;
+  contacts: boolean;
+}
+
+const PermissionGuide = ({
+  status,
+  onRetry,
+  language,
+  t
+}: {
+  status: PermissionStatus,
+  onRetry: () => void,
+  language: Language,
+  t: (key: string) => string
+}) => {
+  const needsAny = !status.accessibility || !status.screen_recording || !status.contacts;
+  if (!needsAny) return null;
+
+  return (
+    <div className="permission-overlay">
+      <div className="permission-card">
+        <h2 style={{ fontSize: '18px', marginBottom: '12px' }}>{t('permissions.title')}</h2>
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+          {t('permissions.desc')}
+        </p>
+
+        <div className="permission-list">
+          <div className={`permission-item ${status.accessibility ? 'granted' : 'missing'}`}>
+            <div className="perm-status-icon">{status.accessibility ? '✅' : '❌'}</div>
+            <div className="perm-info">
+              <span className="perm-name">{t('permissions.accessibility')}</span>
+              <span className="perm-desc">{t('permissions.accessibility_desc')}</span>
+            </div>
+            {!status.accessibility && (
+              <button
+                onClick={() => invoke('open_accessibility_settings')}
+                className="perm-fix-btn"
+              >
+                {t('common.fix')}
+              </button>
+            )}
+          </div>
+
+          <div className={`permission-item ${status.screen_recording ? 'granted' : 'missing'}`}>
+            <div className="perm-status-icon">{status.screen_recording ? '✅' : '❌'}</div>
+            <div className="perm-info">
+              <span className="perm-name">{t('permissions.screen')}</span>
+              <span className="perm-desc">{t('permissions.screen_desc')}</span>
+            </div>
+            {!status.screen_recording && (
+              <button
+                onClick={() => invoke('open_accessibility_settings')} // Screen recording usually in the same area or use a generic opener
+                className="perm-fix-btn"
+              >
+                {t('common.fix')}
+              </button>
+            )}
+          </div>
+
+          <div className={`permission-item ${status.contacts ? 'granted' : 'missing'}`}>
+            <div className="perm-status-icon">{status.contacts ? '✅' : '❌'}</div>
+            <div className="perm-info">
+              <span className="perm-name">{t('permissions.contacts')}</span>
+              <span className="perm-desc">{t('permissions.contacts_desc')}</span>
+            </div>
+            {!status.contacts && (
+              <button
+                onClick={() => invoke('open_contact_settings')}
+                className="perm-fix-btn"
+              >
+                {t('common.fix')}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <button onClick={onRetry} className="wa-submit-btn" style={{ marginTop: '20px' }}>
+          {t('common.check_again')}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const ContactPicker = ({ contacts, onSelect, currentPhone, onRefresh }: { contacts: Contact[], onSelect: (c: Contact) => void, currentPhone: string, onRefresh: () => void }) => {
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -159,6 +245,45 @@ const ContactPicker = ({ contacts, onSelect, currentPhone, onRefresh }: { contac
   );
 };
 
+const Tooltip = ({ text, anchorRect, visible }: { text: string, anchorRect: DOMRect | null, visible: boolean }) => {
+  if (!anchorRect) return null;
+
+  // We want to center relative to the sidebar width, which is 360px
+  // But anchorRect is in viewport coordinates.
+  // The sidebar is usually on the right or left.
+  // In the screenshot, it's the main container.
+
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          className="sidebar-tooltip-container"
+          style={{
+            position: 'fixed',
+            bottom: (window.innerHeight - anchorRect.top) + 12,
+            left: anchorRect.left,
+            width: anchorRect.width,
+            zIndex: 10000,
+            pointerEvents: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center'
+          }}
+          initial={{ opacity: 0, scale: 0.9, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.9, y: 10 }}
+          transition={{ type: "spring", stiffness: 400, damping: 25 }}
+        >
+          <div className="sidebar-tooltip-box">
+            {text}
+          </div>
+          <div className="sidebar-tooltip-line" />
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
+
 function App() {
   const [activeTab, setActiveTab] = useState("Main");
   const [isMouseMoving, setIsMouseMoving] = useState(false);
@@ -199,8 +324,16 @@ function App() {
   const [showMainShutdownPicker, setShowMainShutdownPicker] = useState<boolean>(false);
   const [shouldCloseAppsOnShutdown, setShouldCloseAppsOnShutdown] = useState(false);
   const [isPaintActive, setIsPaintActive] = useState(false);
+  const [hoveredItem, setHoveredItem] = useState<{ id: string; text: string; rect: DOMRect } | null>(null);
   const [isPdfEditorActive, setIsPdfEditorActive] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>({
+    accessibility: true,
+    screen_recording: true,
+    contacts: true
+  });
+  const [showPermissionGuide, setShowPermissionGuide] = useState(false);
+  const [isWaitingForPermission, setIsWaitingForPermission] = useState(false);
   const checkAccessibility = async () => {
     try {
       const isEnabled = await invoke("check_accessibility");
@@ -256,7 +389,9 @@ function App() {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = 0;
     }
-  }, [activeTab]);
+    // Clear tooltips when navigating between tabs OR entering sub-flows
+    setHoveredItem(null);
+  }, [activeTab, isPaintActive, isPdfEditorActive, scheduleShutdownPicker, closeAppsConfirm, showPermissionGuide, isRepairing]);
 
   useEffect(() => {
     invoke("is_mouse_moving").then((state) => {
@@ -290,8 +425,22 @@ function App() {
       }
     };
 
+    const checkAllPermissions = async () => {
+      try {
+        const status = await invoke("check_all_permissions") as PermissionStatus;
+        setPermissionStatus(status);
+        if (!status.accessibility || !status.screen_recording || !status.contacts) {
+          setShowPermissionGuide(true);
+        } else {
+          setShowPermissionGuide(false);
+        }
+      } catch (err) {
+        console.error("Failed to check permissions:", err);
+      }
+    };
+
     fetchContacts();
-    checkAccessibility(); // Check for mouse movement permissions on start
+    checkAllPermissions(); // Check all permissions on start
 
     // Keydown debugger for finding the right shortcut keys
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -462,6 +611,7 @@ function App() {
     setShowMainShutdownPicker(false);
     try {
       if (shouldCloseAppsOnShutdown) {
+        // Now await it properly so shutdown doesn't happen before apps are closed
         await invoke("close_all_apps");
       }
       await invoke("schedule_shutdown", { delaySecs });
@@ -478,14 +628,27 @@ function App() {
   };
 
   const handleExtractText = async () => {
+    setHoveredItem(null); // Clear tooltip when starting OCR
     try {
-      // Logic for copying and notification is now unified in the Rust backend
-      // for both UI clicks, global shortcuts, and triple-tap.
-      await invoke("process_screenshot_ocr");
+      const result = await invoke("process_screenshot_ocr") as string;
+      if (result === "NO_TEXT") {
+        showToast(t('ocr.no_text'));
+      } else {
+        showToast(t('ocr.success'));
+      }
     } catch (err) {
       console.error(err);
-      // Backend already shows a notification, but we can log it here
+      showToast(t('ocr.failed') + ": " + err);
     }
+  };
+
+  const handleHoverItem = (id: string, text: string, e: React.MouseEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setHoveredItem({ id, text, rect });
+  };
+
+  const handleLeaveItem = () => {
+    setHoveredItem(null);
   };
 
   const togglePaintMode = async (active?: boolean) => {
@@ -572,6 +735,20 @@ function App() {
         return;
       }
 
+      const isEnabled = await checkAccessibility();
+      if (!isEnabled) {
+        setIsWaitingForPermission(true);
+        showToast(t('permissions.waiting'));
+        await requestAccessibility();
+        // Wait up to 60 seconds for user to grant permission
+        const granted = await invoke("wait_for_accessibility", { timeoutSecs: 60 }) as boolean;
+        setIsWaitingForPermission(false);
+        if (!granted) {
+          showToast(t('accessibility.toast_required'));
+          return;
+        }
+      }
+
       const finalPhone = sanitizePhone(waPhone, countryCode);
       if (!finalPhone.startsWith("+")) {
         showToast(t('whatsapp.toast_ensure_country'));
@@ -612,6 +789,7 @@ function App() {
     } catch (err) {
       console.error(err);
       showToast(t('common.error') + ": " + err);
+      setIsWaitingForPermission(false);
     }
   };
 
@@ -634,6 +812,7 @@ function App() {
           <PaintBoard
             onClose={() => togglePaintMode(false)}
             t={t}
+            showToast={showToast}
           />
         )}
         {isPdfEditorActive && (
@@ -809,23 +988,23 @@ function App() {
                       </motion.div>
                     )}
 
-                    {"move mouse".includes(appSearchTerm.toLowerCase()) && (
-                      <motion.div
-                        className={`list-item ${isMouseMoving ? "active" : ""}`}
-                        onClick={handleToggleMouse}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.05 }}
-                        whileHover={{ scale: 1.02, x: 5 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        <div className="icon"><MouseIcon /></div>
-                        <span>{t('tabs.move_mouse')}</span>
-                        <div className={`toggle-switch ${isMouseMoving ? "active" : ""}`}>
-                          <div className="toggle-knob"></div>
-                        </div>
-                      </motion.div>
-                    )}
+                    <motion.div
+                      className={`list-item ${isMouseMoving ? "active" : ""}`}
+                      onClick={handleToggleMouse}
+                      onMouseEnter={(e) => handleHoverItem('move_mouse', t('tooltips.move_mouse'), e)}
+                      onMouseLeave={handleLeaveItem}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.05 }}
+                      whileHover={{ scale: 1.02, x: 5 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <div className="icon"><MouseIcon /></div>
+                      <span>{t('tabs.move_mouse')}</span>
+                      <div className={`toggle-switch ${isMouseMoving ? "active" : ""}`}>
+                        <div className="toggle-knob"></div>
+                      </div>
+                    </motion.div>
 
                     {/* {"cat".includes(appSearchTerm.toLowerCase()) && (
                   <div className={`list-item ${isPetMode ? 'active' : ''}`} onClick={togglePetMode}>
@@ -837,55 +1016,54 @@ function App() {
                   </div>
                 )} */}
 
-                    {"whatsapp msg".includes(appSearchTerm.toLowerCase()) && (
-                      <motion.div
-                        className="list-item"
-                        onClick={() => { setActiveTab("WhatsApp"); setAppSearchTerm(""); }}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.1 }}
-                        whileHover={{ scale: 1.02, x: 5 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        <div className="icon"><MsgIcon /></div>
-                        <span>{t('tabs.whatsapp')}</span>
-                      </motion.div>
-                    )}
+                    <motion.div
+                      className="list-item"
+                      onClick={() => { setActiveTab("WhatsApp"); setAppSearchTerm(""); }}
+                      onMouseEnter={(e) => handleHoverItem('whatsapp', t('tooltips.whatsapp'), e)}
+                      onMouseLeave={handleLeaveItem}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.1 }}
+                      whileHover={{ scale: 1.02, x: 5 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <div className="icon"><MsgIcon /></div>
+                      <span>{t('tabs.whatsapp')}</span>
+                    </motion.div>
 
-                    {"screenshot to text".includes(appSearchTerm.toLowerCase()) && (
-                      <motion.div
-                        className="list-item"
-                        onClick={handleExtractText}
-                        title="Shortcut: Control+Alt+2"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.15 }}
-                        whileHover={{ scale: 1.02, x: 5 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        <div className="icon">
-                          <div className="icon"><ScreenshotIcon /></div>
-                        </div>
-                        <span>{t('tabs.screenshot')}</span>
-                      </motion.div>
-                    )}
+                    <motion.div
+                      className="list-item"
+                      onClick={handleExtractText}
+                      onMouseEnter={(e) => handleHoverItem('screenshot', t('tooltips.screenshot'), e)}
+                      onMouseLeave={handleLeaveItem}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.15 }}
+                      whileHover={{ scale: 1.02, x: 5 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <div className="icon">
+                        <div className="icon"><ScreenshotIcon /></div>
+                      </div>
+                      <span>{t('tabs.screenshot')}</span>
+                    </motion.div>
 
-                    {"close all apps".includes(appSearchTerm.toLowerCase()) && (
-                      <motion.div
-                        className="list-item"
-                        onClick={() => setCloseAppsConfirm("all")}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2 }}
-                        whileHover={{ scale: 1.02, x: 5 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        <div className="icon">
-                          <div className="icon"><CloseIcon /></div>
-                        </div>
-                        <span>{t('tabs.close_apps')}</span>
-                      </motion.div>
-                    )}
+                    <motion.div
+                      className="list-item"
+                      onClick={() => setCloseAppsConfirm("all")}
+                      onMouseEnter={(e) => handleHoverItem('close_apps', t('tooltips.close_apps'), e)}
+                      onMouseLeave={handleLeaveItem}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 }}
+                      whileHover={{ scale: 1.02, x: 5 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <div className="icon">
+                        <div className="icon"><CloseIcon /></div>
+                      </div>
+                      <span>{t('tabs.close_apps')}</span>
+                    </motion.div>
 
                     {"schedule shutdown".includes(appSearchTerm.toLowerCase()) && (
                       <motion.div
@@ -896,6 +1074,8 @@ function App() {
                         <motion.div
                           className="list-item"
                           onClick={() => setShowMainShutdownPicker(!showMainShutdownPicker)}
+                          onMouseEnter={(e) => !showMainShutdownPicker && handleHoverItem('shutdown', t('tooltips.shutdown'), e)}
+                          onMouseLeave={handleLeaveItem}
                           whileHover={{ scale: 1.02, x: 5 }}
                           whileTap={{ scale: 0.98 }}
                         >
@@ -992,81 +1172,81 @@ function App() {
                       </motion.div>
                     )}
 
-                    {"pdf to word".includes(appSearchTerm.toLowerCase()) && (
-                      <motion.div
-                        className="list-item"
-                        onClick={() => { setActiveTab("PdfTools"); setAppSearchTerm(""); }}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.3 }}
-                        whileHover={{ scale: 1.02, x: 5 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
+                    <motion.div
+                      className="list-item"
+                      onClick={() => { setActiveTab("PdfTools"); setAppSearchTerm(""); }}
+                      onMouseEnter={(e) => handleHoverItem('pdf_to_word', t('tooltips.pdf_to_word'), e)}
+                      onMouseLeave={handleLeaveItem}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3 }}
+                      whileHover={{ scale: 1.02, x: 5 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <div className="icon">
                         <div className="icon">
-                          <div className="icon">
-                            <PdfIcon />
-                          </div>
+                          <PdfIcon />
                         </div>
-                        <span>{t('tabs.pdf_to_word')}</span>
-                      </motion.div>
-                    )}
+                      </div>
+                      <span>{t('tabs.pdf_to_word')}</span>
+                    </motion.div>
 
-                    {(!appSearchTerm || "color extractor".includes(appSearchTerm.toLowerCase())) && (
-                      <motion.div
-                        className="list-item"
-                        onClick={() => setActiveTab("ColorPicker")}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.35 }}
-                        whileHover={{ scale: 1.02, x: 5 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
+                    <motion.div
+                      className="list-item"
+                      onClick={() => setActiveTab("ColorPicker")}
+                      onMouseEnter={(e) => handleHoverItem('color_picker', t('tooltips.color_picker'), e)}
+                      onMouseLeave={handleLeaveItem}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.35 }}
+                      whileHover={{ scale: 1.02, x: 5 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <div className="icon">
                         <div className="icon">
-                          <div className="icon">
-                            <ColorIcon />
-                          </div>
+                          <ColorIcon />
                         </div>
-                        <span>{t('tabs.color_extractor')}</span>
-                      </motion.div>
-                    )}
+                      </div>
+                      <span>{t('tabs.color_extractor')}</span>
+                    </motion.div>
 
-                    {(!appSearchTerm || "paint".includes(appSearchTerm.toLowerCase()) || "dibujo".includes(appSearchTerm.toLowerCase()) || "pintura".includes(appSearchTerm.toLowerCase())) && (
-                      <motion.div
-                        className="list-item"
-                        onClick={() => togglePaintMode(true)}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.4 }}
-                        whileHover={{ scale: 1.02, x: 5 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
+                    <motion.div
+                      className="list-item"
+                      onClick={() => togglePaintMode(true)}
+                      onMouseEnter={(e) => handleHoverItem('draw', t('tooltips.draw'), e)}
+                      onMouseLeave={handleLeaveItem}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.4 }}
+                      whileHover={{ scale: 1.02, x: 5 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <div className="icon">
                         <div className="icon">
-                          <div className="icon">
-                            <PaintIcon />
-                          </div>
+                          <PaintIcon />
                         </div>
-                        <span>{t('tabs.paint')}</span>
-                      </motion.div>
-                    )}
+                      </div>
+                      <span>{t('tabs.paint')}</span>
+                    </motion.div>
 
-                    {(!appSearchTerm || "image converter".includes(appSearchTerm.toLowerCase()) || "gif".includes(appSearchTerm.toLowerCase())) && (
-                      <motion.div
-                        className="list-item"
-                        onClick={() => setActiveTab("ImageConverter")}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.45 }}
-                        whileHover={{ scale: 1.02, x: 5 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
+                    <motion.div
+                      className="list-item"
+                      onClick={() => setActiveTab("ImageConverter")}
+                      onMouseEnter={(e) => handleHoverItem('image_converter', t('tooltips.image_converter'), e)}
+                      onMouseLeave={handleLeaveItem}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.45 }}
+                      whileHover={{ scale: 1.02, x: 5 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <div className="icon">
                         <div className="icon">
-                          <div className="icon">
-                            <ImageIcon />
-                          </div>
+                          <ImageIcon />
                         </div>
-                        <span>{t('tabs.image_converter')}</span>
-                      </motion.div>
-                    )}
+                      </div>
+                      <span>{t('tabs.image_converter')}</span>
+                    </motion.div>
 
                     {(!appSearchTerm || "profiles".includes(appSearchTerm.toLowerCase()) || "modes".includes(appSearchTerm.toLowerCase())) && (
                       <>
@@ -1220,8 +1400,9 @@ function App() {
                                 className="profile-action-btn"
                                 style={{ margin: 0, justifyContent: 'center' }}
                                 onClick={() => {
-                                  if (scheduleShutdownConfirm && parseInt(scheduleShutdownConfirm) > 0) {
-                                    handleScheduleShutdown(parseInt(scheduleShutdownConfirm) * 60);
+                                  const val = Number.parseInt(scheduleShutdownConfirm);
+                                  if (!Number.isNaN(val) && val > 0) {
+                                    handleScheduleShutdown(val * 60);
                                   }
                                 }}
                               >
@@ -1449,15 +1630,6 @@ function App() {
                       <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Back
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
-                      <div className="icon" style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <PdfIcon />
-                      </div>
-                      <h2 style={{ fontSize: '20px', margin: 0 }}>Smart PDF</h2>
-                    </div>
-                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: '1.5' }}>
-                      {t('pdf_tools.desc') || 'Select a tool to process your PDF files. You can either convert them to editable Word documents or natively draw signatures and add text.'}
-                    </p>
 
                     <motion.div
                       className="profile-mode-card"
@@ -1515,6 +1687,12 @@ function App() {
         )}
 
         {isPetMode && <PetAgent isSidebarVisible={isSidebarOpen} />}
+
+        <Tooltip
+          text={hoveredItem?.text || ""}
+          anchorRect={hoveredItem?.rect || null}
+          visible={!!hoveredItem}
+        />
 
         {pdfConversion.active && (
           <div style={{
@@ -1670,6 +1848,25 @@ function App() {
             <div className="loading-spinner" style={{ width: '18px', height: '18px', borderWidth: '2px' }} />
             <span style={{ fontSize: '14px', fontWeight: 500, letterSpacing: '-0.01em' }}>{t('common.ocr_loading')}</span>
           </div>
+        )}
+
+        {showPermissionGuide && (
+          <PermissionGuide
+            status={permissionStatus}
+            onRetry={async () => {
+              try {
+                const status = await invoke("check_all_permissions") as PermissionStatus;
+                setPermissionStatus(status);
+                if (status.accessibility && status.screen_recording && status.contacts) {
+                  setShowPermissionGuide(false);
+                }
+              } catch (err) {
+                console.error(err);
+              }
+            }}
+            language={language}
+            t={t}
+          />
         )}
 
       </div>
