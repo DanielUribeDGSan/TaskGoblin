@@ -81,83 +81,6 @@ interface PermissionStatus {
   contacts: boolean;
 }
 
-const PermissionGuide = ({
-  status,
-  onRetry,
-  t
-}: {
-  status: PermissionStatus,
-  onRetry: () => void,
-  t: (key: string) => string
-}) => {
-  const needsAny = !status.accessibility || !status.screen_recording || !status.contacts;
-  if (!needsAny) return null;
-
-  return (
-    <div className="permission-overlay">
-      <div className="permission-card">
-        <h2 style={{ fontSize: '18px', marginBottom: '12px' }}>{t('permissions.title')}</h2>
-        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
-          {t('permissions.desc')}
-        </p>
-
-        <div className="permission-list">
-          <div className={`permission-item ${status.accessibility ? 'granted' : 'missing'}`}>
-            <div className="perm-status-icon">{status.accessibility ? '✅' : '❌'}</div>
-            <div className="perm-info">
-              <span className="perm-name">{t('permissions.accessibility')}</span>
-              <span className="perm-desc">{t('permissions.accessibility_desc')}</span>
-            </div>
-            {!status.accessibility && (
-              <button
-                onClick={() => invoke('open_accessibility_settings')}
-                className="perm-fix-btn"
-              >
-                {t('common.fix')}
-              </button>
-            )}
-          </div>
-
-          <div className={`permission-item ${status.screen_recording ? 'granted' : 'missing'}`}>
-            <div className="perm-status-icon">{status.screen_recording ? '✅' : '❌'}</div>
-            <div className="perm-info">
-              <span className="perm-name">{t('permissions.screen')}</span>
-              <span className="perm-desc">{t('permissions.screen_desc')}</span>
-            </div>
-            {!status.screen_recording && (
-              <button
-                onClick={() => invoke('open_accessibility_settings')} // Screen recording usually in the same area or use a generic opener
-                className="perm-fix-btn"
-              >
-                {t('common.fix')}
-              </button>
-            )}
-          </div>
-
-          <div className={`permission-item ${status.contacts ? 'granted' : 'missing'}`}>
-            <div className="perm-status-icon">{status.contacts ? '✅' : '❌'}</div>
-            <div className="perm-info">
-              <span className="perm-name">{t('permissions.contacts')}</span>
-              <span className="perm-desc">{t('permissions.contacts_desc')}</span>
-            </div>
-            {!status.contacts && (
-              <button
-                onClick={() => invoke('open_contact_settings')}
-                className="perm-fix-btn"
-              >
-                {t('common.fix')}
-              </button>
-            )}
-          </div>
-        </div>
-
-        <button onClick={onRetry} className="wa-submit-btn" style={{ marginTop: '20px' }}>
-          {t('common.check_again')}
-        </button>
-      </div>
-    </div>
-  );
-};
 
 const ContactPicker = ({ contacts, onSelect, currentPhone, onRefresh }: { contacts: Contact[], onSelect: (c: Contact) => void, currentPhone: string, onRefresh: () => void }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -325,12 +248,6 @@ function App() {
   const [hoveredItem, setHoveredItem] = useState<{ id: string; text: string; rect: DOMRect } | null>(null);
   const [isPdfEditorActive, setIsPdfEditorActive] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
-  const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>({
-    accessibility: true,
-    screen_recording: true,
-    contacts: true
-  });
-  const [showPermissionGuide, setShowPermissionGuide] = useState(false);
   const checkAccessibility = async () => {
     try {
       const isEnabled = await invoke("check_accessibility");
@@ -388,7 +305,7 @@ function App() {
     }
     // Clear tooltips when navigating between tabs OR entering sub-flows
     setHoveredItem(null);
-  }, [activeTab, isPaintActive, isPdfEditorActive, scheduleShutdownPicker, closeAppsConfirm, showPermissionGuide, isRepairing]);
+  }, [activeTab, isPaintActive, isPdfEditorActive, scheduleShutdownPicker, closeAppsConfirm, isRepairing]);
 
   useEffect(() => {
     invoke("is_mouse_moving").then((state) => {
@@ -425,11 +342,8 @@ function App() {
     const checkAllPermissions = async () => {
       try {
         const status = await invoke("check_all_permissions") as PermissionStatus;
-        setPermissionStatus(status);
-        if (!status.accessibility || !status.screen_recording || !status.contacts) {
-          setShowPermissionGuide(true);
-        } else {
-          setShowPermissionGuide(false);
+        if (!status.accessibility) {
+          invoke("request_accessibility");
         }
       } catch (err) {
         console.error("Failed to check permissions:", err);
@@ -1844,23 +1758,6 @@ function App() {
           </div>
         )}
 
-        {showPermissionGuide && (
-          <PermissionGuide
-            status={permissionStatus}
-            onRetry={async () => {
-              try {
-                const status = await invoke("check_all_permissions") as PermissionStatus;
-                setPermissionStatus(status);
-                if (status.accessibility && status.screen_recording && status.contacts) {
-                  setShowPermissionGuide(false);
-                }
-              } catch (err) {
-                console.error(err);
-              }
-            }}
-            t={t}
-          />
-        )}
 
       </div>
     </>
