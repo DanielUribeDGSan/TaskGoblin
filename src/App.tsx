@@ -305,7 +305,7 @@ function App() {
     }
     // Clear tooltips when navigating between tabs OR entering sub-flows
     setHoveredItem(null);
-  }, [activeTab, isPaintActive, isPdfEditorActive, scheduleShutdownPicker, closeAppsConfirm, isRepairing]);
+  }, [activeTab, isPaintActive, isPdfEditorActive, scheduleShutdownPicker, closeAppsConfirm, isRepairing, showMainShutdownPicker]);
 
   useEffect(() => {
     invoke("is_mouse_moving").then((state) => {
@@ -563,6 +563,7 @@ function App() {
   };
 
   const togglePaintMode = async (active?: boolean) => {
+    setHoveredItem(null);
     const nextActive = active !== undefined ? active : !isPaintActive;
     try {
       // Coordinate: Invoke Tauri FIRST for expansion
@@ -777,7 +778,7 @@ function App() {
             <div className="sidebar-header" data-tauri-drag-region>
               <motion.div
                 className="logo-section"
-                onClick={() => setActiveTab("Main")}
+                onClick={() => { setActiveTab("Main"); setHoveredItem(null); }}
                 style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}
                 data-tauri-drag-region
                 initial={{ x: -20, opacity: 0 }}
@@ -858,7 +859,7 @@ function App() {
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
                   >
-                    <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                    <div className="wa-back-btn" onClick={() => { setActiveTab("Main"); setHoveredItem(null); }}>
                       <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> {t('common.back')}
                     </div>
                     <h2 style={{ fontSize: '18px', marginBottom: '8px' }}>{t('pet.title')}</h2>
@@ -926,7 +927,7 @@ function App() {
 
                     <motion.div
                       className="list-item"
-                      onClick={() => { setActiveTab("WhatsApp"); setAppSearchTerm(""); }}
+                      onClick={() => { setActiveTab("WhatsApp"); setAppSearchTerm(""); setHoveredItem(null); }}
                       onMouseEnter={(e) => handleHoverItem('whatsapp', t('tooltips.whatsapp'), e)}
                       onMouseLeave={handleLeaveItem}
                       initial={{ opacity: 0, y: 10 }}
@@ -1082,7 +1083,7 @@ function App() {
 
                     <motion.div
                       className="list-item"
-                      onClick={() => { setActiveTab("PdfTools"); setAppSearchTerm(""); }}
+                      onClick={() => { setActiveTab("PdfTools"); setAppSearchTerm(""); setHoveredItem(null); }}
                       onMouseEnter={(e) => handleHoverItem('pdf_to_word', t('tooltips.pdf_to_word'), e)}
                       onMouseLeave={handleLeaveItem}
                       initial={{ opacity: 0, y: 10 }}
@@ -1101,7 +1102,7 @@ function App() {
 
                     <motion.div
                       className="list-item"
-                      onClick={() => setActiveTab("ColorPicker")}
+                      onClick={() => { setActiveTab("ColorPicker"); setHoveredItem(null); }}
                       onMouseEnter={(e) => handleHoverItem('color_picker', t('tooltips.color_picker'), e)}
                       onMouseLeave={handleLeaveItem}
                       initial={{ opacity: 0, y: 10 }}
@@ -1139,7 +1140,7 @@ function App() {
 
                     <motion.div
                       className="list-item"
-                      onClick={() => setActiveTab("ImageConverter")}
+                      onClick={() => { setActiveTab("ImageConverter"); setHoveredItem(null); }}
                       onMouseEnter={(e) => handleHoverItem('image_converter', t('tooltips.image_converter'), e)}
                       onMouseLeave={handleLeaveItem}
                       initial={{ opacity: 0, y: 10 }}
@@ -1159,7 +1160,7 @@ function App() {
                     {(!appSearchTerm || "profiles".includes(appSearchTerm.toLowerCase()) || "modes".includes(appSearchTerm.toLowerCase())) && (
                       <>
                         <div className="section-label" style={{ marginTop: '20px' }} data-tauri-drag-region>{t('sidebar.profiles')}</div>
-                        <div className="list-item" onClick={() => { setActiveTab("Profiles"); setAppSearchTerm(""); }}>
+                        <div className="list-item" onClick={() => { setActiveTab("Profiles"); setAppSearchTerm(""); setHoveredItem(null); }}>
                           <div className="icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                           </div>
@@ -1190,7 +1191,7 @@ function App() {
                     {"settings".includes(appSearchTerm.toLowerCase()) && (
                       <motion.div
                         className="list-item"
-                        onClick={() => { setActiveTab("Settings"); setAppSearchTerm(""); }}
+                        onClick={() => { setActiveTab("Settings"); setAppSearchTerm(""); setHoveredItem(null); }}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.55 }}
@@ -1518,7 +1519,7 @@ function App() {
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
                   >
-                    <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                    <div className="wa-back-btn" onClick={() => { setActiveTab("Main"); setHoveredItem(null); }}>
                       <BackIcon /> <span style={{ marginLeft: '8px' }}>{t('common.back')}</span>
                     </div>
                     <ImageConverter showToast={showToast} t={t} />
@@ -1534,7 +1535,7 @@ function App() {
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
                   >
-                    <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                    <div className="wa-back-btn" onClick={() => { setActiveTab("Main"); setHoveredItem(null); }}>
                       <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Back
                     </div>
 
@@ -1571,6 +1572,7 @@ function App() {
                       </div>
                       <div className="profile-mode-actions">
                         <button type="button" className="profile-action-btn" onClick={() => {
+                          setHoveredItem(null);
                           setIsPdfEditorActive(true);
                           invoke('resize_window', { width: 1000.0, height: 800.0, center: true });
                           invoke('set_dialog_open', { open: true });
