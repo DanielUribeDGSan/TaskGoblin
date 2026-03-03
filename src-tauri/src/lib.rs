@@ -114,11 +114,14 @@ async fn schedule_whatsapp(
             // Open URL via Tauri's robust opener which handles Windows correctly
             let _ = app_handle.opener().open_url(&url, None::<&str>);
 
-            // Auto-send logic for Windows: wait 6s for the app to load the chat, then hit Enter
-            tokio::time::sleep(tokio::time::Duration::from_secs(6)).await;
+            // Auto-send logic for Windows: wait 8s for the app to load the chat, then hit Enter
+            tokio::time::sleep(tokio::time::Duration::from_secs(8)).await;
             let _ = tauri::async_runtime::spawn_blocking(move || {
                 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
                 if let Ok(mut enigo) = Enigo::new(&Settings::default()) {
+                    // Send Enter twice with a small delay to ensure focus and sending
+                    let _ = enigo.key(Key::Return, Direction::Click);
+                    std::thread::sleep(std::sync::Duration::from_millis(500));
                     let _ = enigo.key(Key::Return, Direction::Click);
                 }
             })

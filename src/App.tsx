@@ -167,23 +167,25 @@ const ContactPicker = ({ contacts, onSelect, currentPhone, onRefresh }: { contac
 };
 
 const Tooltip = ({ text, anchorRect, visible }: { text: string, anchorRect: DOMRect | null, visible: boolean }) => {
-  if (!anchorRect) return null;
+  const [displayData, setDisplayData] = useState<{ text: string, rect: DOMRect } | null>(null);
 
-  // We want to center relative to the sidebar width, which is 360px
-  // But anchorRect is in viewport coordinates.
-  // The sidebar is usually on the right or left.
-  // In the screenshot, it's the main container.
+  useEffect(() => {
+    if (visible && anchorRect) {
+      setDisplayData({ text, rect: anchorRect });
+    }
+  }, [visible, text, anchorRect]);
 
   return (
     <AnimatePresence>
-      {visible && (
+      {visible && displayData && (
         <motion.div
+          key="sidebar-tooltip"
           className="sidebar-tooltip-container"
           style={{
             position: 'fixed',
-            bottom: (window.innerHeight - anchorRect.top) + 12,
-            left: anchorRect.left,
-            width: anchorRect.width,
+            bottom: (window.innerHeight - displayData.rect.top) + 12,
+            left: displayData.rect.left,
+            width: displayData.rect.width,
             zIndex: 10000,
             pointerEvents: 'none',
             display: 'flex',
@@ -196,7 +198,7 @@ const Tooltip = ({ text, anchorRect, visible }: { text: string, anchorRect: DOMR
           transition={{ type: "spring", stiffness: 400, damping: 25 }}
         >
           <div className="sidebar-tooltip-box">
-            {text}
+            {displayData.text}
           </div>
           <div className="sidebar-tooltip-line" />
         </motion.div>
@@ -884,7 +886,7 @@ function App() {
                     style={{ flex: 1 }}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
+                    exit={{ opacity: 0, pointerEvents: 'none' }}
                   >
                     {"main".includes(appSearchTerm.toLowerCase()) && (
                       <motion.div
@@ -1214,10 +1216,10 @@ function App() {
                     className="wa-form-container profiles-container"
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
+                    exit={{ opacity: 0, x: -20, pointerEvents: 'none' }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
                   >
-                    <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                    <div className="wa-back-btn" onClick={() => { setActiveTab("Main"); setHoveredItem(null); }}>
                       <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Back
                     </div>
                     <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
@@ -1335,10 +1337,10 @@ function App() {
                     className="wa-form-container"
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
+                    exit={{ opacity: 0, x: -20, pointerEvents: 'none' }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
                   >
-                    <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                    <div className="wa-back-btn" onClick={() => { setActiveTab("Main"); setHoveredItem(null); }}>
                       <BackIcon /> <span style={{ marginLeft: '8px' }}>{t('common.back')}</span>
                     </div>
                     <ColorExtractor t={t} />
@@ -1351,10 +1353,10 @@ function App() {
                     className="wa-form-container"
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
+                    exit={{ opacity: 0, x: -20, pointerEvents: 'none' }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
                   >
-                    <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                    <div className="wa-back-btn" onClick={() => { setActiveTab("Main"); setHoveredItem(null); }}>
                       <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Back
                     </div>
                     <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
@@ -1400,10 +1402,10 @@ function App() {
                     className="wa-form-container"
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
+                    exit={{ opacity: 0, x: -20, pointerEvents: 'none' }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
                   >
-                    <div className="wa-back-btn" onClick={() => setActiveTab("Main")}>
+                    <div className="wa-back-btn" onClick={() => { setActiveTab("Main"); setHoveredItem(null); }}>
                       <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> {t('common.back')}
                     </div>
 
@@ -1516,7 +1518,7 @@ function App() {
                     className="wa-form-container"
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
+                    exit={{ opacity: 0, x: -20, pointerEvents: 'none' }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
                   >
                     <div className="wa-back-btn" onClick={() => { setActiveTab("Main"); setHoveredItem(null); }}>
@@ -1532,7 +1534,7 @@ function App() {
                     className="wa-form-container profiles-container"
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
+                    exit={{ opacity: 0, x: -20, pointerEvents: 'none' }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
                   >
                     <div className="wa-back-btn" onClick={() => { setActiveTab("Main"); setHoveredItem(null); }}>
