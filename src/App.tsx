@@ -250,6 +250,17 @@ function App() {
   const [hoveredItem, setHoveredItem] = useState<{ id: string; text: string; rect: DOMRect } | null>(null);
   const [isPdfEditorActive, setIsPdfEditorActive] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [showTooltips, setShowTooltips] = useState(() => {
+    const saved = localStorage.getItem('show-tooltips');
+    return saved === null ? true : saved === 'true';
+  });
+  const [showPermissionsCarousel, setShowPermissionsCarousel] = useState(false);
+  const [carouselStep, setCarouselStep] = useState(0); // 0: Accessibility, 1: Screen, 2: Contacts
+  const [permStatus, setPermStatus] = useState<PermissionStatus>({
+    accessibility: true,
+    screen_recording: true,
+    contacts: true
+  });
   const checkAccessibility = async () => {
     try {
       const isEnabled = await invoke("check_accessibility");
@@ -293,10 +304,14 @@ function App() {
     }
   }, [isDarkMode]);
 
-  // Persist language
+  // Persist settings
   useEffect(() => {
     localStorage.setItem('app-language', language);
   }, [language]);
+
+  useEffect(() => {
+    localStorage.setItem('show-tooltips', String(showTooltips));
+  }, [showTooltips]);
 
   // Ref for scroll container to reset scroll position on tab change
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -344,6 +359,14 @@ function App() {
     const checkAllPermissions = async () => {
       try {
         const status = await invoke("check_all_permissions") as PermissionStatus;
+        setPermStatus(status);
+
+        // On Mac, if any critical permission is missing, show carousel
+        // Check if screen_recording is false as a hint for Mac (Windows returns true)
+        if (!status.accessibility || !status.screen_recording) {
+          setShowPermissionsCarousel(true);
+        }
+
         if (!status.accessibility) {
           invoke("request_accessibility");
         }
@@ -659,6 +682,7 @@ function App() {
           showToast(t('accessibility.toast_required'));
           return;
         }
+        // If granted, we continue to schedule
       }
 
       const finalPhone = sanitizePhone(waPhone, countryCode);
@@ -1364,6 +1388,21 @@ function App() {
                     </p>
 
                     <motion.div
+                      className={`list-item ${showTooltips ? "active" : ""}`}
+                      onClick={() => setShowTooltips(!showTooltips)}
+                      whileHover={{ scale: 1.02, x: 5 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <div className="icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                      </div>
+                      <span>{t('settings.show_tooltips')}</span>
+                      <div className={`toggle-switch ${showTooltips ? "active" : ""}`}>
+                        <div className="toggle-knob"></div>
+                      </div>
+                    </motion.div>
+
+                    <motion.div
                       className={`list-item ${isAutostartEnabled ? "active" : ""}`}
                       onClick={handleToggleAutostart}
                       whileHover={{ scale: 1.02, x: 5 }}
@@ -1603,7 +1642,7 @@ function App() {
         <Tooltip
           text={hoveredItem?.text || ""}
           anchorRect={hoveredItem?.rect || null}
-          visible={!!hoveredItem}
+          visible={!!hoveredItem && showTooltips}
         />
 
         {pdfConversion.active && (
@@ -1762,6 +1801,111 @@ function App() {
           </div>
         )}
 
+        {showPermissionsCarousel && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            backdropFilter: 'blur(10px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 20000,
+            color: 'white',
+            padding: '24px'
+          }}>
+            <div style={{
+              backgroundColor: 'var(--bg-secondary)',
+              padding: '32px',
+              borderRadius: '24px',
+              width: '100%',
+              maxWidth: '340px',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+              border: '1px solid var(--border-color)',
+              textAlign: 'center',
+              position: 'relative'
+            }}>
+              <h2 style={{ margin: '0 0 12px 0', fontSize: '20px', fontWeight: 700 }}>{t('permissions.carousel_title')}</h2>
+
+              <div style={{ minHeight: '160px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <AnimatePresence mode="wait">
+                  {carouselStep === 0 && (
+                    <motion.div key="step-0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                      <div style={{ fontSize: '48px', marginBottom: '16px' }}>🖱️</div>
+                      <h3 style={{ margin: '0 0 8px 0', fontSize: '18px' }}>{t('permissions.accessibility')}</h3>
+                      <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                        {t('permissions.accessibility_desc')}
+                      </p>
+                    </motion.div>
+                  )}
+                  {carouselStep === 1 && (
+                    <motion.div key="step-1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                      <div style={{ fontSize: '48px', marginBottom: '16px' }}>📸</div>
+                      <h3 style={{ margin: '0 0 8px 0', fontSize: '18px' }}>{t('permissions.screen')}</h3>
+                      <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                        {t('permissions.screen_desc')}
+                      </p>
+                    </motion.div>
+                  )}
+                  {carouselStep === 2 && (
+                    <motion.div key="step-2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                      <div style={{ fontSize: '48px', marginBottom: '16px' }}>📱</div>
+                      <h3 style={{ margin: '0 0 8px 0', fontSize: '18px' }}>{t('permissions.contacts')}</h3>
+                      <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                        {t('permissions.contacts_desc')}
+                      </p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', margin: '24px 0' }}>
+                {[0, 1, 2].map(i => (
+                  <div key={i} style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '4px',
+                    backgroundColor: i === carouselStep ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)',
+                    transition: 'all 0.3s ease'
+                  }} />
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <button
+                  onClick={async () => {
+                    if (carouselStep === 0) invoke("request_accessibility");
+                    else if (carouselStep === 1) invoke("request_screen_recording");
+                    else if (carouselStep === 2) invoke("request_contacts");
+
+                    // Simple refresh check
+                    const status = await invoke("check_all_permissions") as PermissionStatus;
+                    setPermStatus(status);
+                  }}
+                  style={{ width: '100%', padding: '14px', borderRadius: '14px', border: 'none', background: 'rgba(255,255,255,0.05)', color: 'white', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}
+                >
+                  {t('permissions.grant_permission')}
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (carouselStep < 2) {
+                      setCarouselStep(carouselStep + 1);
+                    } else {
+                      setShowPermissionsCarousel(false);
+                    }
+                  }}
+                  style={{ width: '100%', padding: '14px', borderRadius: '14px', border: 'none', background: 'var(--accent-color)', color: 'white', cursor: 'pointer', fontSize: '14px', fontWeight: 600, boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}
+                >
+                  {carouselStep < 2 ? t('permissions.next_step') : t('permissions.get_started')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </>

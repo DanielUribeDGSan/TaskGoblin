@@ -177,13 +177,23 @@ export const translations = {
             title: "Permissions Required 🛡️",
             desc: "TaskGoblin needs the following permissions to work correctly. Please grant them in System Settings.",
             accessibility: "Accessibility",
-            accessibility_desc: "Required to move the mouse automatically.",
+            accessibility_desc: "Allows TaskGoblin to control your mouse and keyboard for functions like Mouse Mover.",
             screen: "Screen Recording",
             screen_desc: "Required for 'Screenshot to Text' (OCR).",
             contacts: "Contacts",
-            contacts_desc: "Required to pick WhatsApp numbers from your list.",
+            contacts_desc: "Allows selecting contacts directly for scheduling WhatsApp messages.",
             check_again: "Check Again",
             waiting: "Waiting for permission...",
+            carousel_title: "Initial Setup (Mac)",
+            grant_permission: "Grant Permission",
+            next_step: "Next",
+            get_started: "Get Started!"
+        },
+        settings: {
+            title: "Settings",
+            show_tooltips: "Show Tooltips (Help)",
+            autostart: "Start on Login",
+            language: "Language"
         },
         ocr: {
             success: "Text Copied!",
@@ -205,6 +215,22 @@ export const translations = {
         }
     },
     es: {
+        permissions: {
+            waiting: "Esperando permisos...",
+            carousel_title: "Configuración Inicial (Mac)",
+            accessibility_desc: "Permite que TaskGoblin controle tu mouse y teclado para funciones como el Mover Mouse.",
+            screen_recording_desc: "Necesario para capturar la pantalla y realizar OCR (copiar texto de imágenes).",
+            contacts_desc: "Permite seleccionar contactos directamente para programar mensajes de WhatsApp.",
+            grant_permission: "Otorgar Permiso",
+            next_step: "Siguiente",
+            get_started: "¡Comenzar!"
+        },
+        settings: {
+            title: "Configuración",
+            show_tooltips: "Mostrar Tooltips (Ayuda)",
+            autostart: "Iniciar al arrancar sesión",
+            language: "Idioma"
+        },
         common: {
             back: "Volver",
             cancel: "Cancelar",
@@ -376,18 +402,6 @@ export const translations = {
             title: "SOPORTE",
             repair_title: "Reparar Permisos (Solución de Actualización)",
             repair_desc: "Usa esto si los permisos fallan después de actualizar",
-        },
-        permissions: {
-            title: "Permisos Necesarios 🛡️",
-            desc: "TaskGoblin necesita los siguientes permisos para funcionar. Por favor, otórgalos en Configuración del Sistema.",
-            accessibility: "Accesibilidad",
-            accessibility_desc: "Necesario para mover el mouse automáticamente.",
-            screen: "Grabación de Pantalla",
-            screen_desc: "Necesario para 'Captura a Texto' (OCR).",
-            contacts: "Contactos",
-            contacts_desc: "Necesario para elegir números de WhatsApp de tu lista.",
-            check_again: "Revisar de nuevo",
-            waiting: "Esperando permiso...",
         },
         ocr: {
             success: "¡Texto Copiado!",
