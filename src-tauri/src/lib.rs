@@ -121,7 +121,7 @@ async fn schedule_whatsapp(
                 if let Ok(mut enigo) = Enigo::new(&Settings::default()) {
                     // Send Enter twice with a small delay to ensure focus and sending
                     let _ = enigo.key(Key::Return, Direction::Click);
-                    std::thread::sleep(std::sync::Duration::from_millis(500));
+                    std::thread::sleep(std::time::Duration::from_millis(500));
                     let _ = enigo.key(Key::Return, Direction::Click);
                 }
             })
