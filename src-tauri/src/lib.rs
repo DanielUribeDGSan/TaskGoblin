@@ -1693,7 +1693,7 @@ try {
                     match general_purpose::STANDARD.decode(b64_part) {
                         Ok(bytes) => {
                             let text = String::from_utf8_lossy(&bytes).to_string();
-                            Ok(fix_ocr_spanish_accents(text))
+                            Ok(text)
                         }
                         Err(_) => Ok(stdout), // fallback
                     }
