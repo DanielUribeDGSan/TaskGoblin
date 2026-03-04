@@ -914,7 +914,18 @@ async fn schedule_shutdown(
         }
 
         // Cancel any previous Windows scheduled shutdown
-        let _ = Command::new("shutdown").arg("/a").output();
+        let _ = tauri::async_runtime::spawn_blocking(|| {
+            #[allow(unused_mut)]
+            let mut cmd = Command::new("shutdown");
+            cmd.arg("/a");
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000);
+            }
+            cmd.output()
+        })
+        .await;
 
         // 1. Cancel existing countdown task if any
         let mut new_rx;
@@ -1289,7 +1300,10 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
             let _ = window.set_focus();
         }
 
-        match capture_res {
+        let app_handle = window.app_handle();
+        let ocr_island_label = "ocr-island";
+
+        let res = match capture_res {
             Ok(output) => {
                 // If user pressed Escape to cancel, the file might not exist
                 if !std::path::Path::new(temp_image_path).exists() {
@@ -1307,9 +1321,10 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
                     return Ok("".to_string());
                 }
 
+                use tauri::Emitter;
+                let _ = app_handle.emit("ocr-start", ());
+
                 // Show island "Copiando texto..." while OCR runs
-                let app_handle = window.app_handle();
-                let ocr_island_label = "ocr-island";
                 if let Some(existing) = app_handle.get_webview_window(ocr_island_label) {
                     let _ = existing.close();
                 }
@@ -1343,6 +1358,9 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
                         ));
                     }
                 }
+
+                // Give the island a longer moment to mount its listener and load Vite bundles
+                tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
 
                 // 2. Swift script to run Vision OCR on the image
                 let swift_script = r#"
@@ -1385,36 +1403,84 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
                 // 3. Clean up the temp image
                 let _ = fs::remove_file(temp_image_path);
 
-                // Close "Copiando texto..." island
-                if let Some(w) = app_handle.get_webview_window(ocr_island_label) {
-                    let _ = w.close();
-                }
+                let _ = app_handle.emit("ocr-end", ());
 
-                match ocr_res {
+                let (emit_status, res) = match ocr_res {
                     Ok(out) => {
                         let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
                         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
 
                         if !out.status.success() || stdout.starts_with("ERROR:") {
                             let err_msg = if !stdout.is_empty() { stdout } else { stderr };
-                            Err(format!("Error OCR: {}", err_msg))
+                            ("error".to_string(), Err(format!("Error OCR: {}", err_msg)))
                         } else if stdout.starts_with("BASE64:") {
                             // Decode Base64 to get perfect UTF-8 string
                             let b64_data = stdout.trim_start_matches("BASE64:");
                             use base64::{engine::general_purpose, Engine as _};
                             match general_purpose::STANDARD.decode(b64_data) {
-                                Ok(bytes) => Ok(String::from_utf8_lossy(&bytes).to_string()),
-                                Err(_) => Ok(stdout), // fallback if decode fails
+                                Ok(bytes) => {
+                                    let text = String::from_utf8_lossy(&bytes).to_string();
+                                    let status = if text.trim().is_empty() {
+                                        "no_text"
+                                    } else {
+                                        "success"
+                                    };
+                                    (status.to_string(), Ok(text))
+                                }
+                                Err(_) => ("success".to_string(), Ok(stdout)),
                             }
                         } else {
-                            Ok(stdout)
+                            let status = if stdout.trim().is_empty() {
+                                "no_text"
+                            } else {
+                                "success"
+                            };
+                            (status.to_string(), Ok(stdout))
                         }
                     }
-                    Err(e) => Err(format!("No se pudo ejecutar el script de OCR: {}", e)),
+                    Err(e) => (
+                        "error".to_string(),
+                        Err(format!("No se pudo ejecutar el script de OCR: {}", e)),
+                    ),
+                };
+
+                if let Some(island) = app_handle.get_webview_window("ocr-island") {
+                    let _ = island.close();
                 }
+
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+
+                let t_msg = if emit_status == "success" {
+                    "Texto copiado"
+                } else if emit_status == "no_text" {
+                    "No se detectó texto"
+                } else {
+                    "Error al capturar texto"
+                };
+
+                let _ = window.emit(
+                    "show-toast",
+                    serde_json::json!({ "title": "OCR", "message": t_msg }),
+                );
+
+                res
             }
-            Err(e) => Err(format!("Fallo al iniciar screencapture: {}", e)),
-        }
+            Err(e) => {
+                if let Some(island) = app_handle.get_webview_window("ocr-island") {
+                    let _ = island.close();
+                }
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.emit(
+                    "show-toast",
+                    serde_json::json!({ "title": "OCR", "message": "Fallo al iniciar screencapture" }),
+                );
+                Err(format!("Fallo al iniciar screencapture: {}", e))
+            }
+        };
+        res
     }
     #[cfg(target_os = "windows")]
     {
@@ -1518,6 +1584,9 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
                 ));
             }
         }
+
+        // Give the island a longer moment to mount its listener
+        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
 
         let temp_image_path = std::env::temp_dir().join("mouse_crazy_ocr_capture.png");
         let temp_image_str = temp_image_path.to_string_lossy().to_string();
@@ -1662,47 +1731,77 @@ try {
             e.to_string()
         })?;
 
-        // Close "Copiando texto..." island and restore main window
-        if let Some(w) = app_handle.get_webview_window("ocr-island") {
-            let _ = w.close();
-        }
         let _ = app_handle.emit("ocr-end", ());
-        if was_visible {
-            let _ = window.unminimize();
-            let _ = window.show();
-            let _ = window.set_focus();
-        }
-
-        match ocr_res {
+        let ocr_island_label = "ocr-island";
+        let (emit_status, res) = match ocr_res {
             Ok(out) => {
                 let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
                 let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
 
                 if !out.status.success() {
-                    Err(format!(
-                        "OCR error: {}",
-                        if !stderr.is_empty() {
-                            stderr
-                        } else {
-                            "Unknown PowerShell error".to_string()
-                        }
-                    ))
+                    (
+                        "error".to_string(),
+                        Err(format!(
+                            "OCR error: {}",
+                            if !stderr.is_empty() {
+                                stderr
+                            } else {
+                                "Unknown PowerShell error".to_string()
+                            }
+                        )),
+                    )
                 } else if stdout.starts_with("B64:") {
                     let b64_part = stdout[4..].trim();
                     use base64::{engine::general_purpose, Engine as _};
                     match general_purpose::STANDARD.decode(b64_part) {
                         Ok(bytes) => {
                             let text = String::from_utf8_lossy(&bytes).to_string();
-                            Ok(text)
+                            let status = if text.trim().is_empty() {
+                                "no_text"
+                            } else {
+                                "success"
+                            };
+                            (status.to_string(), Ok(text))
                         }
-                        Err(_) => Ok(stdout), // fallback
+                        Err(_) => ("success".to_string(), Ok(stdout)),
                     }
                 } else {
-                    Ok(stdout)
+                    let status = if stdout.trim().is_empty() {
+                        "no_text"
+                    } else {
+                        "success"
+                    };
+                    (status.to_string(), Ok(stdout))
                 }
             }
-            Err(e) => Err(format!("Failed to run Combined OCR: {}", e)),
+            Err(e) => (
+                "error".to_string(),
+                Err(format!("Failed to run Combined OCR: {}", e)),
+            ),
+        };
+
+        if let Some(island) = app_handle.get_webview_window("ocr-island") {
+            let _ = island.close();
         }
+
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+
+        let t_msg = if emit_status == "success" {
+            "Texto copiado"
+        } else if emit_status == "no_text" {
+            "No se detectó texto"
+        } else {
+            "Error al capturar texto"
+        };
+
+        let _ = window.emit(
+            "show-toast",
+            serde_json::json!({ "title": "OCR", "message": t_msg }),
+        );
+
+        res
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
@@ -1844,9 +1943,11 @@ async fn save_paint_capture(app_handle: tauri::AppHandle) -> Result<(), String> 
 
     #[cfg(target_os = "windows")]
     {
-        if let Some(window) = app_handle.get_webview_window("main") {
-            let _ = window.hide();
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        if let Some(_window) = app_handle.get_webview_window("main") {
+            // Note: We used to hide the window here, but that prevents drawings from being captured.
+            // PaintBoard.tsx handles hiding the toolbar UI before calling this.
+            // let _ = window.hide();
+            // tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
             // Use PowerShell to capture the primary screen
             // We need to add System.Windows.Forms to get Screen bounds
@@ -1870,16 +1971,25 @@ async fn save_paint_capture(app_handle: tauri::AppHandle) -> Result<(), String> 
                 save_path_str.replace("'", "''") // Escape single quotes for PowerShell
             );
 
-            let output = Command::new("powershell")
-                .arg("-NoProfile")
+            #[allow(unused_mut)]
+            let mut cmd = Command::new("powershell");
+            cmd.arg("-NoProfile")
                 .arg("-NonInteractive")
                 .arg("-Command")
-                .arg(ps_script)
+                .arg(ps_script);
+
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            }
+
+            let output = cmd
                 .output()
                 .map_err(|e| format!("Failed to capture screen on Windows: {}", e))?;
 
-            let _ = window.show();
-            let _ = window.set_focus();
+            // let _ = window.show();
+            // let _ = window.set_focus();
 
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);

@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { listen } from "@tauri-apps/api/event";
 import { translations, type Language } from "./i18n/translations";
-
+import "./App.css";
 function getOcrLabel(): string {
     try {
         const lang = (localStorage.getItem("app-language") as Language) || "es";
@@ -20,7 +21,7 @@ const pillStyle = {
     padding: '0 16px',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     minWidth: '150px',
     boxShadow: '0 8px 24px rgba(0,0,0,0.8)',
     position: 'relative' as const
@@ -28,8 +29,57 @@ const pillStyle = {
 
 const Island = () => {
     const [timeLeftStr, setTimeLeftStr] = useState("...");
-    const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
+    const [ocrStatus, setOcrStatus] = useState<'loading' | 'success' | 'no_text' | 'error'>('loading');
+
+    const params = typeof globalThis.window !== "undefined" ? new URLSearchParams(globalThis.window.location.search) : new URLSearchParams();
     const isOcrMode = params.get("mode") === "ocr";
+
+    const getStatusLabel = () => {
+        const lang = (localStorage.getItem("app-language") as Language) || "es";
+        switch (ocrStatus) {
+            case 'success': return translations[lang]?.ocr?.success ?? translations.es.ocr.success;
+            case 'no_text': return translations[lang]?.ocr?.no_text ?? translations.es.ocr.no_text;
+            case 'error': return translations[lang]?.ocr?.failed ?? translations.es.ocr.failed;
+            default: return getOcrLabel();
+        }
+    };
+
+    useEffect(() => {
+        if (!isOcrMode) return;
+
+        console.log("Island: OCR Mode active, listening for ocr-result...");
+
+        const unlistenPromise = listen<{ status: 'success' | 'no_text' | 'error' }>("ocr-result", (event) => {
+            console.log("Island: Received ocr-result event!", event.payload.status);
+
+            // To make it "reappear" (vuelva a salir), we could briefly reset or just let AnimatePresence handle it
+            setOcrStatus(event.payload.status);
+
+            // Auto close after exactly 2 seconds as requested by user
+            setTimeout(async () => {
+                try {
+                    const win = getCurrentWebviewWindow();
+                    console.log("Island: Auto-closing window after 2s result display");
+                    await win.close();
+                } catch (e) {
+                    console.error("Island: Failed to close window:", e);
+                }
+            }, 2000);
+        });
+
+        const safety = setTimeout(async () => {
+            console.log("Island: Frontend safety timeout reached.");
+            try {
+                const win = getCurrentWebviewWindow();
+                await win.close();
+            } catch (e) { }
+        }, 15000);
+
+        return () => {
+            unlistenPromise.then(fn => fn());
+            clearTimeout(safety);
+        };
+    }, [isOcrMode]);
 
     useEffect(() => {
         if (isOcrMode) return;
@@ -54,7 +104,6 @@ const Island = () => {
                 const hours = Math.floor(diff / 3600);
                 const mins = Math.floor((diff % 3600) / 60);
                 const secs = diff % 60;
-
                 const pad = (n: number) => n.toString().padStart(2, '0');
 
                 if (hours > 0) {
@@ -62,7 +111,6 @@ const Island = () => {
                 } else {
                     setTimeLeftStr(`${mins}:${pad(secs)}`);
                 }
-
             } catch (err) {
                 console.error("Failed to get shutdown time:", err);
             }
@@ -70,7 +118,6 @@ const Island = () => {
 
         tick();
         interval = setInterval(tick, 1000);
-
         return () => clearInterval(interval);
     }, [isOcrMode]);
 
@@ -97,21 +144,33 @@ const Island = () => {
             }}>
                 <div style={pillStyle} data-tauri-drag-region>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', zIndex: 1 }} data-tauri-drag-region>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#28c840" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 0.8s linear infinite' }}>
-                            <path d="M21 12a9 9 0 11-6.22-8.56" />
-                        </svg>
+                        {ocrStatus === 'loading' ? (
+                            <svg className="rotating-spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#28c840" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21 12a9 9 0 11-6.22-8.56" />
+                            </svg>
+                        ) : ocrStatus === 'success' ? (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#28c840" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                        ) : (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="12" y1="8" x2="12" y2="12" />
+                                <line x1="12" y1="16" x2="12.01" y2="16" />
+                            </svg>
+                        )}
                         <span style={{
                             fontSize: '15px',
                             fontWeight: 600,
                             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-                            color: '#28c840',
-                            letterSpacing: '0.3px'
+                            color: ocrStatus === 'error' ? '#ff3b30' : '#28c840',
+                            letterSpacing: '0.3px',
+                            whiteSpace: 'nowrap'
                         }} data-tauri-drag-region>
-                            {getOcrLabel()}
+                            {getStatusLabel()}
                         </span>
                     </div>
                 </div>
-                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </div>
         );
     }
@@ -128,7 +187,6 @@ const Island = () => {
             overflow: 'hidden'
         }}>
             <div style={pillStyle} data-tauri-drag-region>
-
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', zIndex: 1 }} data-tauri-drag-region>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#28c840" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" data-tauri-drag-region>
                         <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line>
@@ -144,7 +202,6 @@ const Island = () => {
                         {timeLeftStr}
                     </span>
                 </div>
-
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '16px' }} data-tauri-drag-region>
                     <button
                         onClick={handleCancel}
@@ -172,7 +229,6 @@ const Island = () => {
                             e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)';
                             e.currentTarget.style.transform = 'scale(1)';
                         }}
-                        title="Cancel Shutdown"
                     >
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -180,7 +236,6 @@ const Island = () => {
                         </svg>
                     </button>
                 </div>
-
             </div>
         </div>
     );

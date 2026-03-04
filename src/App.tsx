@@ -1770,30 +1770,6 @@ function App() {
           </div>
         )}
 
-        {isExtracting && (
-          <div style={{
-            position: 'fixed',
-            top: '32px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            backgroundColor: 'rgba(0,0,0,0.85)',
-            backdropFilter: 'blur(12px)',
-            padding: '12px 24px',
-            borderRadius: '24px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            zIndex: 11000,
-            border: '1px solid rgba(255,255,255,0.1)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-            color: 'white',
-            minWidth: '200px',
-            justifyContent: 'center'
-          }}>
-            <div className="loading-spinner" style={{ width: '18px', height: '18px', borderWidth: '2px' }} />
-            <span style={{ fontSize: '14px', fontWeight: 500, letterSpacing: '-0.01em' }}>{t('common.ocr_loading')}</span>
-          </div>
-        )}
 
         {showPermissionsCarousel && (
           <div style={{

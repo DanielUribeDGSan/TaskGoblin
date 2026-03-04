@@ -1993,3 +1993,12 @@ body:not(.dark) .sidebar-tooltip-box {
 body:not(.dark) .sidebar-tooltip-line {
   background: linear-gradient(to bottom, rgba(108, 92, 231, 0.6), rgba(108, 92, 231, 0));
 }
+@keyframes spin-linear {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.rotating-spinner {
+  animation: spin-linear 1s linear infinite;
+  transform-origin: center;
+}
