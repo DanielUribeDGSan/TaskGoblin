@@ -256,11 +256,6 @@ function App() {
   });
   const [showPermissionsCarousel, setShowPermissionsCarousel] = useState(false);
   const [carouselStep, setCarouselStep] = useState(0); // 0: Accessibility, 1: Screen, 2: Contacts
-  const [permStatus, setPermStatus] = useState<PermissionStatus>({
-    accessibility: true,
-    screen_recording: true,
-    contacts: true
-  });
   const checkAccessibility = async () => {
     try {
       const isEnabled = await invoke("check_accessibility");
@@ -359,7 +354,6 @@ function App() {
     const checkAllPermissions = async () => {
       try {
         const status = await invoke("check_all_permissions") as PermissionStatus;
-        setPermStatus(status);
 
         // On Mac, if any critical permission is missing, show carousel
         // Check if screen_recording is false as a hint for Mac (Windows returns true)
@@ -1882,8 +1876,7 @@ function App() {
                     else if (carouselStep === 2) invoke("request_contacts");
 
                     // Simple refresh check
-                    const status = await invoke("check_all_permissions") as PermissionStatus;
-                    setPermStatus(status);
+                    await invoke("check_all_permissions");
                   }}
                   style={{ width: '100%', padding: '14px', borderRadius: '14px', border: 'none', background: 'rgba(255,255,255,0.05)', color: 'white', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}
                 >
