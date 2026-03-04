@@ -249,7 +249,7 @@ function App() {
   const [isPaintActive, setIsPaintActive] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<{ id: string; text: string; rect: DOMRect } | null>(null);
   const [isPdfEditorActive, setIsPdfEditorActive] = useState(false);
-  const [isExtracting, setIsExtracting] = useState(false);
+
   const [showTooltips, setShowTooltips] = useState(() => {
     const saved = localStorage.getItem('show-tooltips');
     return saved === null ? true : saved === 'true';
@@ -324,8 +324,6 @@ function App() {
       setIsMouseMoving(state as boolean);
     }).catch(console.error);
 
-    const unlistenStart = listen("ocr-start", () => setIsExtracting(true));
-    const unlistenEnd = listen("ocr-end", () => setIsExtracting(false));
 
     // Check autostart state
     isEnabled().then(setIsAutostartEnabled).catch(console.error);
@@ -443,8 +441,7 @@ function App() {
       unlistenSidebar.then(u => u());
       unlistenToast.then(u => u());
       unlistenPdf.then(fn => fn());
-      unlistenStart.then(fn => fn());
-      unlistenEnd.then(fn => fn());
+
     };
   }, []);
 
