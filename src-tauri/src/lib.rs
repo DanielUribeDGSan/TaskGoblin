@@ -1138,6 +1138,7 @@ async fn process_image(
 
             let q = if optimize { 75 } else { quality.unwrap_or(80) };
             let mut writer = std::io::BufWriter::new(output_file);
+            #[allow(deprecated)]
             let encoder = WebPEncoder::new_with_quality(&mut writer, WebPQuality::lossy(q));
 
             encoder
@@ -1240,37 +1241,6 @@ async fn process_image(
     }
 
     Ok(())
-}
-
-/// Fixes common OCR misreads for Spanish (e.g. å→á).
-#[cfg(target_os = "windows")]
-fn fix_ocr_spanish_accents(s: String) -> String {
-    s.replace('å', "á")
-        .replace('Å', "Á")
-        .replace('ã', "á")
-        .replace('Ã', "Á")
-        .replace('õ', "ó")
-        .replace('Õ', "Ó")
-        .replace('è', "é")
-        .replace('È', "É")
-        .replace('ì', "í")
-        .replace('Ì', "Í")
-        .replace('ù', "ú")
-        .replace('Ù', "Ú")
-        // Misreads from user examples
-        .replace("iS", "¡S")
-        .replace(" 10 ", " lo ")
-        .replace(" dd ", " del ")
-        .replace("mensaJe", "mensaje")
-        .replace("errorz", "errores")
-        .replace("conv«sión", "conversión")
-        .replace("Sistana", "Sistema")
-        .replace("EI ", "El ")
-}
-
-#[cfg(not(target_os = "windows"))]
-fn fix_ocr_spanish_accents(s: String) -> String {
-    s
 }
 
 #[tauri::command]
