@@ -283,27 +283,11 @@ fn request_accessibility() -> Result<(), String> {
 fn check_screen_recording() -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
-        // Simple way to check if we can get window info which is gated by Screen Recording
-        use std::process::Command;
-        let script =
-            "tell application \"System Events\" to get name of window 1 of process \"Finder\"";
-        let output = Command::new("osascript").arg("-e").arg(script).output();
-
-        match output {
-            Ok(out) => {
-                let stderr = String::from_utf8_lossy(&out.stderr);
-                if stderr.contains("not allowed") || stderr.contains("denied") {
-                    return Ok(false);
-                }
-                // If it succeeds or has a different error, it might be allowed but Finder has no windows
-                // A better check for macOS 10.15+ is CGPreflightScreenCaptureAccess
-                extern "C" {
-                    fn CGPreflightScreenCaptureAccess() -> bool;
-                }
-                unsafe { Ok(CGPreflightScreenCaptureAccess()) }
-            }
-            Err(_) => Ok(false),
+        #[link(name = "CoreGraphics", kind = "framework")]
+        extern "C" {
+            fn CGPreflightScreenCaptureAccess() -> bool;
         }
+        unsafe { Ok(CGPreflightScreenCaptureAccess()) }
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -312,28 +296,53 @@ fn check_screen_recording() -> Result<bool, String> {
 }
 
 #[tauri::command]
+fn request_screen_recording() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        #[link(name = "CoreGraphics", kind = "framework")]
+        extern "C" {
+            fn CGRequestScreenCaptureAccess() -> bool;
+        }
+        unsafe {
+            let _ = CGRequestScreenCaptureAccess();
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(())
+    }
+}
+
+#[tauri::command]
 fn check_contacts() -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
-        use std::process::Command;
-        // Check if we can access contacts via AppleScript
-        let script = "tell application \"Contacts\" to count every person";
-        let output = Command::new("osascript").arg("-e").arg(script).output();
-        match output {
-            Ok(out) => {
-                let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                let stderr = String::from_utf8_lossy(&out.stderr);
-                if stderr.contains("not allowed") || stderr.contains("denied") {
-                    return Ok(false);
-                }
-                Ok(stdout.parse::<i32>().is_ok())
-            }
-            Err(_) => Ok(false),
+        if let Ok(home) = std::env::var("HOME") {
+            let path = std::path::Path::new(&home).join("Library/Application Support/AddressBook");
+            return Ok(path.read_dir().is_ok());
         }
+        Ok(false)
     }
     #[cfg(not(target_os = "macos"))]
     {
         Ok(true)
+    }
+}
+
+#[tauri::command]
+fn request_contacts() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        // Check if we can access contacts via AppleScript to trigger prompt when requested
+        let script = "tell application \"Contacts\" to count every person";
+        let _ = Command::new("osascript").arg("-e").arg(script).output();
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(())
     }
 }
 
@@ -2408,6 +2417,8 @@ pub fn run() {
             check_all_permissions,
             wait_for_accessibility,
             request_accessibility,
+            request_contacts,
+            request_screen_recording,
             start_window_drag,
             repair_permissions,
             toggle_paint_mode,
