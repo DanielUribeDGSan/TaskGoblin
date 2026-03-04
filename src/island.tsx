@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { listen } from "@tauri-apps/api/event";
 import { translations, type Language } from "./i18n/translations";
 import "./App.css";
 function getOcrLabel(): string {
@@ -47,26 +46,27 @@ const Island = () => {
     useEffect(() => {
         if (!isOcrMode) return;
 
-        console.log("Island: OCR Mode active, listening for ocr-result...");
+        console.log("Island: OCR Mode active, checking URL status...");
+        const urlStatus = params.get("status") as 'loading' | 'success' | 'no_text' | 'error' | null;
 
-        const unlistenPromise = listen<{ status: 'success' | 'no_text' | 'error' }>("ocr-result", (event) => {
-            console.log("Island: Received ocr-result event!", event.payload.status);
+        if (urlStatus && ['loading', 'success', 'no_text', 'error'].includes(urlStatus)) {
+            setOcrStatus(urlStatus);
 
-            // To make it "reappear" (vuelva a salir), we could briefly reset or just let AnimatePresence handle it
-            setOcrStatus(event.payload.status);
+            // If it's a final state (not loading), auto close after 2 seconds
+            if (urlStatus !== 'loading') {
+                setTimeout(async () => {
+                    try {
+                        const win = getCurrentWebviewWindow();
+                        console.log("Island: Auto-closing window after 2s result display");
+                        await win.close();
+                    } catch (e) {
+                        console.error("Island: Failed to close window:", e);
+                    }
+                }, 2000);
+            }
+        }
 
-            // Auto close after exactly 2 seconds as requested by user
-            setTimeout(async () => {
-                try {
-                    const win = getCurrentWebviewWindow();
-                    console.log("Island: Auto-closing window after 2s result display");
-                    await win.close();
-                } catch (e) {
-                    console.error("Island: Failed to close window:", e);
-                }
-            }, 2000);
-        });
-
+        // Safety timeout for 'loading' state just in case it bugs out
         const safety = setTimeout(async () => {
             console.log("Island: Frontend safety timeout reached.");
             try {
@@ -76,7 +76,6 @@ const Island = () => {
         }, 15000);
 
         return () => {
-            unlistenPromise.then(fn => fn());
             clearTimeout(safety);
         };
     }, [isOcrMode]);

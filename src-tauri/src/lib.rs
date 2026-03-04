@@ -1256,6 +1256,55 @@ async fn process_image(
 
 #[tauri::command]
 async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String, String> {
+    let spawn_result_island = |app_handle: &tauri::AppHandle, status: &str| {
+        if let Some(island) = app_handle.get_webview_window("ocr-island") {
+            let _ = island.close();
+        }
+        if let Some(island) = app_handle.get_webview_window("ocr-island-result") {
+            let _ = island.close();
+        }
+        let url = format!("island.html?mode=ocr&status={}", status);
+        let _ = tauri::WebviewWindowBuilder::new(
+            app_handle,
+            "ocr-island-result",
+            tauri::WebviewUrl::App(url.parse().unwrap()),
+        )
+        .title("OCR Result")
+        .inner_size(240.0, 60.0)
+        .transparent(true)
+        .decorations(false)
+        .always_on_top(true)
+        .resizable(false)
+        .skip_taskbar(true)
+        .shadow(false)
+        .position(0.0, 30.0)
+        .build()
+        .ok();
+
+        if let Some(ref island) = app_handle.get_webview_window("ocr-island-result") {
+            if let Ok(Some(monitor)) = island.current_monitor() {
+                let mw = monitor.size().width as f64;
+                let ww = island
+                    .outer_size()
+                    .unwrap_or(tauri::PhysicalSize::new(240, 60))
+                    .width as f64;
+                let x = mw / 2.0 - ww / 2.0;
+                let _ = island.set_position(tauri::Position::Physical(
+                    tauri::PhysicalPosition::new(x as i32, 20),
+                ));
+            }
+        }
+
+        // Bulletproof auto-close from backend to guarantee it vanishes after 2s
+        let app_handle_clone = app_handle.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(2200)).await;
+            if let Some(island) = app_handle_clone.get_webview_window("ocr-island-result") {
+                let _ = island.close();
+            }
+        });
+    };
+
     #[cfg(target_os = "macos")]
     {
         use std::fs;
@@ -1331,7 +1380,7 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
                 let _ocr_island = tauri::WebviewWindowBuilder::new(
                     app_handle,
                     ocr_island_label,
-                    tauri::WebviewUrl::App("island.html?mode=ocr".into()),
+                    tauri::WebviewUrl::App("island.html?mode=ocr&status=loading".parse().unwrap()),
                 )
                 .title("OCR")
                 .inner_size(240.0, 60.0)
@@ -1444,39 +1493,12 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
                     ),
                 };
 
-                if let Some(island) = app_handle.get_webview_window("ocr-island") {
-                    let _ = island.close();
-                }
-
-                let _ = window.show();
-                let _ = window.unminimize();
-                let _ = window.set_focus();
-
-                let t_msg = if emit_status == "success" {
-                    "Texto copiado"
-                } else if emit_status == "no_text" {
-                    "No se detectó texto"
-                } else {
-                    "Error al capturar texto"
-                };
-
-                let _ = window.emit(
-                    "show-toast",
-                    serde_json::json!({ "title": "OCR", "message": t_msg }),
-                );
+                spawn_result_island(&app_handle, emit_status.as_str());
 
                 res
             }
             Err(e) => {
-                if let Some(island) = app_handle.get_webview_window("ocr-island") {
-                    let _ = island.close();
-                }
-                let _ = window.show();
-                let _ = window.unminimize();
-                let _ = window.emit(
-                    "show-toast",
-                    serde_json::json!({ "title": "OCR", "message": "Fallo al iniciar screencapture" }),
-                );
+                spawn_result_island(&app_handle, "error");
                 Err(format!("Fallo al iniciar screencapture: {}", e))
             }
         };
@@ -1558,7 +1580,7 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
         let _ocr_island = tauri::WebviewWindowBuilder::new(
             &app_handle,
             ocr_island_label,
-            tauri::WebviewUrl::App("island.html?mode=ocr".into()),
+            tauri::WebviewUrl::App("island.html?mode=ocr&status=loading".parse().unwrap()),
         )
         .title("OCR")
         .inner_size(240.0, 60.0)
@@ -1780,26 +1802,7 @@ try {
             ),
         };
 
-        if let Some(island) = app_handle.get_webview_window("ocr-island") {
-            let _ = island.close();
-        }
-
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
-
-        let t_msg = if emit_status == "success" {
-            "Texto copiado"
-        } else if emit_status == "no_text" {
-            "No se detectó texto"
-        } else {
-            "Error al capturar texto"
-        };
-
-        let _ = window.emit(
-            "show-toast",
-            serde_json::json!({ "title": "OCR", "message": t_msg }),
-        );
+        spawn_result_island(&app_handle, emit_status.as_str());
 
         res
     }
