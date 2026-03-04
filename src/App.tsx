@@ -334,20 +334,7 @@ function App() {
     };
     globalThis.addEventListener("contextmenu", handleContextMenu);
 
-    // Fetch contacts
-    const fetchContacts = async () => {
-      setIsLoadingContacts(true);
-      setContactError(null);
-      try {
-        const data = await invoke("get_contacts");
-        setContacts(data as Contact[]);
-      } catch (err) {
-        console.error(err);
-        setContactError(err as string);
-      } finally {
-        setIsLoadingContacts(false);
-      }
-    };
+    // Removed fetchContacts from mount effect
 
     const checkAllPermissions = async () => {
       try {
@@ -355,19 +342,15 @@ function App() {
 
         // On Mac, if any critical permission is missing, show carousel
         // Check if screen_recording is false as a hint for Mac (Windows returns true)
-        if (!status.accessibility || !status.screen_recording) {
+        if (!status.accessibility || !status.screen_recording || !status.contacts) {
           setShowPermissionsCarousel(true);
-        }
-
-        if (!status.accessibility) {
-          invoke("request_accessibility");
         }
       } catch (err) {
         console.error("Failed to check permissions:", err);
       }
     };
 
-    fetchContacts();
+    // Make sure we only check status, we don't automatically request.
     checkAllPermissions(); // Check all permissions on start
 
     // Keydown debugger for finding the right shortcut keys
@@ -445,12 +428,27 @@ function App() {
     };
   }, []);
 
-  // Clear WhatsApp fields when entering the tab as requested
+  const fetchContacts = async () => {
+    setIsLoadingContacts(true);
+    setContactError(null);
+    try {
+      const data = await invoke("get_contacts");
+      setContacts(data as Contact[]);
+    } catch (err) {
+      console.error(err);
+      setContactError(err as string);
+    } finally {
+      setIsLoadingContacts(false);
+    }
+  };
+
+  // Clear WhatsApp fields and fetch contacts when entering the tab as requested
   useEffect(() => {
     if (activeTab === "WhatsApp") {
       setWaPhone("");
       setWaMsg("");
       setWaDateTime(new Date());
+      fetchContacts();
     }
   }, [activeTab]);
 
@@ -1446,19 +1444,7 @@ function App() {
                         setWaPhone(cleaned);
                       }}
                       currentPhone={waPhone}
-                      onRefresh={async () => {
-                        setIsLoadingContacts(true);
-                        setContactError(null);
-                        try {
-                          const data = await invoke("get_contacts");
-                          setContacts(data as Contact[]);
-                        } catch (err) {
-                          console.error(err);
-                          setContactError(err as string);
-                        } finally {
-                          setIsLoadingContacts(false);
-                        }
-                      }}
+                      onRefresh={fetchContacts}
                     />
                     {isLoadingContacts && (
                       <div style={{ textAlign: 'center', padding: '10px', fontSize: '12px', color: 'var(--accent-color)' }}>
@@ -1782,7 +1768,8 @@ function App() {
             justifyContent: 'center',
             zIndex: 20000,
             color: 'white',
-            padding: '24px'
+            padding: '24px',
+            pointerEvents: 'auto'
           }}>
             <div style={{
               backgroundColor: 'var(--bg-secondary)',
@@ -1793,7 +1780,8 @@ function App() {
               boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
               border: '1px solid var(--border-color)',
               textAlign: 'center',
-              position: 'relative'
+              position: 'relative',
+              pointerEvents: 'auto'
             }}>
               <h2 style={{ margin: '0 0 12px 0', fontSize: '20px', fontWeight: 700 }}>{t('permissions.carousel_title')}</h2>
 
