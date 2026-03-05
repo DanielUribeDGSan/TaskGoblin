@@ -14,8 +14,8 @@
     "windows": [
       {
         "title": "TaskGoblin",
-        "width": 360,
-        "height": 580,
+        "width": 440,
+        "height": 660,
         "resizable": false,
         "visible": false,
         "hiddenTitle": false,

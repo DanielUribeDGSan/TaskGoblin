@@ -475,12 +475,17 @@ async fn toggle_paint_mode(
             // Restore sidebar size
             let _ = window.set_ignore_cursor_events(false);
             let _ = window.set_resizable(false);
-            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(360.0, 580.0)));
+            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(440.0, 660.0)));
 
             // Force position restoration
             let pos_lock = state.last_tray_pos.lock().await;
             if let Some(pos) = *pos_lock {
-                let _ = window.set_position(tauri::Position::Physical(pos));
+                // Adjust position to account for 40px padding
+                let adjusted_pos = tauri::PhysicalPosition::new(
+                    pos.x - (40.0 * window.scale_factor().unwrap_or(1.0)) as i32,
+                    pos.y - (40.0 * window.scale_factor().unwrap_or(1.0)) as i32,
+                );
+                let _ = window.set_position(tauri::Position::Physical(adjusted_pos));
             }
 
             let _ = window.set_always_on_top(false);
@@ -510,12 +515,16 @@ async fn toggle_paint_mode(
             let _ = window.set_always_on_top(false);
             let _ = window.set_resizable(false);
             let _ = window.set_decorations(false);
-            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(360.0, 580.0)));
+            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(440.0, 660.0)));
 
             // Restore last position
             let pos_lock = state.last_tray_pos.lock().await;
             if let Some(pos) = *pos_lock {
-                let _ = window.set_position(tauri::Position::Physical(pos));
+                let adjusted_pos = tauri::PhysicalPosition::new(
+                    pos.x - (40.0 * window.scale_factor().unwrap_or(1.0)) as i32,
+                    pos.y - (40.0 * window.scale_factor().unwrap_or(1.0)) as i32,
+                );
+                let _ = window.set_position(tauri::Position::Physical(adjusted_pos));
             }
 
             let _ = window.show();
@@ -2408,10 +2417,14 @@ async fn resize_window(
 #[tauri::command]
 async fn restore_window(window: tauri::Window, state: State<'_, AppState>) -> Result<(), String> {
     let _ = window.set_resizable(false);
-    let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(360.0, 580.0)));
+    let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(440.0, 660.0)));
     let pos_lock = state.last_tray_pos.lock().await;
     if let Some(pos) = *pos_lock {
-        let _ = window.set_position(tauri::Position::Physical(pos));
+        let adjusted_pos = tauri::PhysicalPosition::new(
+            pos.x - (40.0 * window.scale_factor().unwrap_or(1.0)) as i32,
+            pos.y - (40.0 * window.scale_factor().unwrap_or(1.0)) as i32,
+        );
+        let _ = window.set_position(tauri::Position::Physical(adjusted_pos));
     }
     Ok(())
 }
@@ -2501,7 +2514,11 @@ pub fn run() {
                     };
 
                     if let Some(pos) = initial_pos {
-                        let _ = window_clone.set_position(pos);
+                        let adjusted_pos = tauri::PhysicalPosition::new(
+                            pos.x - (40.0 * window_clone.scale_factor().unwrap_or(1.0)) as i32,
+                            pos.y - (40.0 * window_clone.scale_factor().unwrap_or(1.0)) as i32,
+                        );
+                        let _ = window_clone.set_position(adjusted_pos);
                     } else if let Ok(Some(monitor)) = window_clone.current_monitor() {
                         let monitor_size = monitor.size();
                         let scale_factor = monitor.scale_factor();
@@ -2511,7 +2528,10 @@ pub fn run() {
                         let sidebar_width_physical = (sidebar_width_logical * scale_factor) as i32;
 
                         let x = monitor_size.width as i32 - sidebar_width_physical - 20; // 20px padding from right
-                        let pos = tauri::PhysicalPosition::new(x, 30); // 30px from top
+                                                                                         // Adjust window X to account for shadow padding
+                        let window_x = x - (40.0 * scale_factor) as i32;
+                        let window_y = 30 - (40.0 * scale_factor) as i32;
+                        let pos = tauri::PhysicalPosition::new(window_x, window_y);
 
                         let _ = window_clone.set_position(pos);
                     }
@@ -2604,7 +2624,12 @@ pub fn run() {
                                         let sidebar_width_physical = (360.0 * scale_factor) as i32;
 
                                         let x = (position.x as i32) - (sidebar_width_physical / 2);
-                                        let pos = tauri::PhysicalPosition::new(x, 30);
+                                        // Adjust window position to account for shadow padding
+                                        let window_x = x - (40.0 * scale_factor) as i32;
+                                        let window_y = 30 - (40.0 * scale_factor) as i32;
+                                        let pos = tauri::PhysicalPosition::new(x, 30); // We still save the "sidebar" pos
+                                        let window_pos =
+                                            tauri::PhysicalPosition::new(window_x, window_y);
                                         {
                                             let mut last_pos = state.last_tray_pos.lock().await;
                                             *last_pos = Some(pos);
@@ -2618,7 +2643,7 @@ pub fn run() {
                                                 last_y: Some(pos.y),
                                             },
                                         );
-                                        let _ = window_clone.set_position(pos);
+                                        let _ = window_clone.set_position(window_pos);
                                     }
                                     let _ = window_clone.show();
                                     let _ = window_clone.set_focus();
@@ -2644,8 +2669,8 @@ pub fn run() {
                             if let Ok(size) = w.outer_size() {
                                 if let Ok(Some(monitor)) = w.current_monitor() {
                                     let scale = monitor.scale_factor();
-                                    let expected_width = (360.0 * scale) as u32;
-                                    let expected_height = (580.0 * scale) as u32;
+                                    let expected_width = (440.0 * scale) as u32;
+                                    let expected_height = (660.0 * scale) as u32;
 
                                     // Allow some tolerance for decorations/rounding
                                     let is_standard_size =
@@ -2654,15 +2679,21 @@ pub fn run() {
                                                 < 50;
 
                                     if is_standard_size {
+                                        // When saving position from a drag, we need to subtract the padding
+                                        // so that the sidebar position is what's actually saved.
+                                        let sidebar_pos = tauri::PhysicalPosition::new(
+                                            p.x + (40.0 * scale) as i32,
+                                            p.y + (40.0 * scale) as i32,
+                                        );
                                         let state = app_handle.state::<AppState>();
                                         let mut last_pos = state.last_tray_pos.lock().await;
-                                        *last_pos = Some(p);
+                                        *last_pos = Some(sidebar_pos);
                                         let _ = confy::store(
                                             "mouse-crazy-app",
                                             None,
                                             AppConfig {
-                                                last_x: Some(p.x),
-                                                last_y: Some(p.y),
+                                                last_x: Some(sidebar_pos.x),
+                                                last_y: Some(sidebar_pos.y),
                                             },
                                         );
                                     }

@@ -90,12 +90,12 @@ body {
   pointer-events: none;
   /* Let clicks pass through to paint UI or others */
   z-index: 1;
-  padding: 0;
-  /* No more padding, window fits card */
+  padding: 40px;
+  /* Space for shadows */
 }
 
 .app-root.full-screen {
-  padding: 40px 15px 0 0;
+  padding: 0;
   /* Matches 30px window Y + 10px normal padding */
   align-items: flex-start;
   justify-content: flex-end;
@@ -112,9 +112,9 @@ body {
 }
 
 .internal-drag-handle.top {
-  top: 0;
-  left: 0;
-  width: 100%;
+  top: 40px;
+  left: 40px;
+  width: 360px;
   height: 40px;
   /* Header area */
 }
@@ -128,16 +128,15 @@ body {
 
 .internal-drag-handle.right {
   top: 40px;
-  right: 0;
+  right: 40px;
   width: 15px;
-  height: calc(100% - 40px);
+  height: 580px;
 }
 
 .app-wrapper {
   position: relative;
-  width: 100%;
-  /* Take full window size now */
-  height: 100%;
+  width: 360px;
+  height: 580px;
   background: var(--bg-gradient);
   display: flex;
   flex-direction: column;

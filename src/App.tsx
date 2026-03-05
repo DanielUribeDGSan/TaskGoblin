@@ -782,7 +782,7 @@ function App() {
           <PdfEditor
             onClose={() => {
               setIsPdfEditorActive(false);
-              invoke('resize_window', { width: 360.0, height: 580.0, center: true });
+              invoke('resize_window', { width: 440.0, height: 660.0, center: true });
               invoke('set_dialog_open', { open: false });
             }}
             showToast={showToast}
