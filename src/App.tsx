@@ -434,7 +434,27 @@ function App() {
 
     window.addEventListener('mousedown', handleGlobalClick);
 
+    // Auto-check permissions while carousel is open to auto-advance
+    let permissionInterval: any = null;
+    if (showPermissionsCarousel) {
+      permissionInterval = setInterval(async () => {
+        try {
+          const status = await invoke("check_all_permissions") as PermissionStatus;
+          if (carouselStep === 0 && status.accessibility) {
+            setCarouselStep(1);
+          } else if (carouselStep === 1 && status.screen_recording) {
+            setCarouselStep(2);
+          } else if (carouselStep === 2 && status.contacts) {
+            setShowPermissionsCarousel(false);
+          }
+        } catch (e) {
+          console.error("Auto-check failed:", e);
+        }
+      }, 2000);
+    }
+
     return () => {
+      if (permissionInterval) clearInterval(permissionInterval);
       globalThis.removeEventListener("contextmenu", handleContextMenu);
       window.removeEventListener("keydown", handleKeyDown);
       unregister('Control+Alt+2').catch(console.error);

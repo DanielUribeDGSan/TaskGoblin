@@ -268,10 +268,19 @@ fn check_accessibility() -> Result<bool, String> {
 fn request_accessibility() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
-        // Moving mouse 1 pixel to trigger the permission dialog
-        let _ = enigo.move_mouse(0, 0, enigo::Coordinate::Rel);
-        Ok(())
+        // On macOS, just trying to perform an event like moving the mouse
+        // will trigger the OS permission prompt if not already authorized.
+        match Enigo::new(&Settings::default()) {
+            Ok(mut enigo) => {
+                let _ = enigo.move_mouse(0, 0, enigo::Coordinate::Rel);
+                Ok(())
+            }
+            Err(_) => {
+                // If Enigo fails to initialize, it's likely because of permissions.
+                // We should open settings as a fallback.
+                open_accessibility_settings()
+            }
+        }
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -2306,6 +2315,18 @@ async fn hide_window(window: tauri::WebviewWindow) {
 
 fn spawn_key_listener(app_handle: tauri::AppHandle) {
     std::thread::spawn(move || {
+        // --- Delay initialization until authorized on Mac ---
+        #[cfg(target_os = "macos")]
+        {
+            loop {
+                if let Ok(true) = check_accessibility() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_secs(2));
+            }
+        }
+        // ---------------------------------------------------
+
         let device_state = DeviceState::new();
         let mut last_tap = Instant::now();
         let mut tap_count = 0;
