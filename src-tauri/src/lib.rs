@@ -2467,12 +2467,7 @@ pub fn run() {
             // Start global key listener for Triple-Tap Control
             spawn_key_listener(app.handle().clone());
 
-            // Explicitly request notification permissions on startup
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                use tauri_plugin_notification::NotificationExt;
-                let _ = handle.notification().request_permission();
-            });
+            // (Notification permissions will be requested only when needed or via carousel)
             // --- Initial Window Positioning ---
             if let Some(window) = app.get_webview_window("main") {
                 let window_clone = window.clone();
@@ -2685,21 +2680,7 @@ pub fn run() {
             let app_handle = app.handle().clone();
             // Use a real OS thread for Enigo (it is !Send on Windows, so async tasks fail)
             std::thread::spawn(move || {
-                // Retry initialization if it fails (Windows sometimes needs a moment)
-                let mut enigo_opt = None;
-                for _ in 0..5 {
-                    if let Ok(e) = Enigo::new(&Settings::default()) {
-                        enigo_opt = Some(e);
-                        break;
-                    }
-                    std::thread::sleep(Duration::from_secs(1));
-                }
-
-                let mut enigo = match enigo_opt {
-                    Some(e) => e,
-                    None => return, // Silently exit if still fails after retries
-                };
-
+                let mut enigo_opt: Option<Enigo> = None;
                 let mut offset: i32 = 1; // 1px diagonal is enough to keep awake without interrupting use
                 loop {
                     std::thread::sleep(Duration::from_millis(2000)); // 2 second interval is plenty keep-awake
@@ -2711,9 +2692,22 @@ pub fn run() {
                     };
 
                     if moving {
-                        // Diagonal movement is more robust, but just 1px
-                        let _ = enigo.move_mouse(offset, offset, enigo::Coordinate::Rel);
-                        offset = -offset;
+                        // Lazy init enigo only when we actually start moving
+                        if enigo_opt.is_none() {
+                            for _ in 0..5 {
+                                if let Ok(e) = Enigo::new(&Settings::default()) {
+                                    enigo_opt = Some(e);
+                                    break;
+                                }
+                                std::thread::sleep(Duration::from_secs(1));
+                            }
+                        }
+
+                        if let Some(ref mut enigo) = enigo_opt {
+                            // Diagonal movement is more robust, but just 1px
+                            let _ = enigo.move_mouse(offset, offset, enigo::Coordinate::Rel);
+                            offset = -offset;
+                        }
                     }
                 }
             });

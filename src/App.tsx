@@ -69,6 +69,19 @@ const BackIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
 );
 
+const InfoIcon = ({ onClick, active }: { onClick: (e: React.MouseEvent) => void, active: boolean }) => (
+  <div
+    className={`info-icon-wrapper ${active ? 'active' : ''}`}
+    onClick={(e) => { e.stopPropagation(); onClick(e); }}
+  >
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <line x1="12" y1="16" x2="12" y2="12"></line>
+      <line x1="12" y1="8" x2="12.01" y2="8"></line>
+    </svg>
+  </div>
+);
+
 
 interface Contact {
   name: string;
@@ -166,7 +179,7 @@ const ContactPicker = ({ contacts, onSelect, currentPhone, onRefresh }: { contac
   );
 };
 
-const Tooltip = ({ text, anchorRect, visible }: { text: string, anchorRect: DOMRect | null, visible: boolean }) => {
+const Tooltip = ({ text, anchorRect, visible, onClose }: { text: string, anchorRect: DOMRect | null, visible: boolean, onClose: () => void }) => {
   const [displayData, setDisplayData] = useState<{ text: string, rect: DOMRect } | null>(null);
 
   useEffect(() => {
@@ -184,10 +197,10 @@ const Tooltip = ({ text, anchorRect, visible }: { text: string, anchorRect: DOMR
           style={{
             position: 'fixed',
             bottom: (window.innerHeight - displayData.rect.top) + 12,
-            left: displayData.rect.left,
-            width: displayData.rect.width,
+            left: 0,
+            width: '100%',
             zIndex: 10000,
-            pointerEvents: 'none',
+            pointerEvents: 'auto',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center'
@@ -198,6 +211,9 @@ const Tooltip = ({ text, anchorRect, visible }: { text: string, anchorRect: DOMR
           transition={{ type: "spring", stiffness: 400, damping: 25 }}
         >
           <div className="sidebar-tooltip-box">
+            <button className="sidebar-tooltip-close" onClick={onClose}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
             {displayData.text}
           </div>
           <div className="sidebar-tooltip-line" />
@@ -250,10 +266,6 @@ function App() {
   const [hoveredItem, setHoveredItem] = useState<{ id: string; text: string; rect: DOMRect } | null>(null);
   const [isPdfEditorActive, setIsPdfEditorActive] = useState(false);
 
-  const [showTooltips, setShowTooltips] = useState(() => {
-    const saved = localStorage.getItem('show-tooltips');
-    return saved === null ? true : saved === 'true';
-  });
   const [showPermissionsCarousel, setShowPermissionsCarousel] = useState(false);
   const [carouselStep, setCarouselStep] = useState(0); // 0: Accessibility, 1: Screen, 2: Contacts
   const checkAccessibility = async () => {
@@ -303,10 +315,6 @@ function App() {
   useEffect(() => {
     localStorage.setItem('app-language', language);
   }, [language]);
-
-  useEffect(() => {
-    localStorage.setItem('show-tooltips', String(showTooltips));
-  }, [showTooltips]);
 
   // Ref for scroll container to reset scroll position on tab change
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -416,6 +424,16 @@ function App() {
       }
     });
 
+    const handleGlobalClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('.info-icon-wrapper') || target.closest('.sidebar-tooltip-box')) {
+        return;
+      }
+      setHoveredItem(null);
+    };
+
+    window.addEventListener('mousedown', handleGlobalClick);
+
     return () => {
       globalThis.removeEventListener("contextmenu", handleContextMenu);
       window.removeEventListener("keydown", handleKeyDown);
@@ -424,9 +442,9 @@ function App() {
       unlistenSidebar.then(u => u());
       unlistenToast.then(u => u());
       unlistenPdf.then(fn => fn());
-
+      window.removeEventListener('mousedown', handleGlobalClick);
     };
-  }, []);
+  }, [hoveredItem]);
 
   const fetchContacts = async () => {
     setIsLoadingContacts(true);
@@ -568,12 +586,13 @@ function App() {
   };
 
   const handleHoverItem = (id: string, text: string, e: React.MouseEvent) => {
+    // If clicking same item, close it
+    if (hoveredItem?.id === id) {
+      setHoveredItem(null);
+      return;
+    }
     const rect = e.currentTarget.getBoundingClientRect();
     setHoveredItem({ id, text, rect });
-  };
-
-  const handleLeaveItem = () => {
-    setHoveredItem(null);
   };
 
   const togglePaintMode = async (active?: boolean) => {
@@ -913,18 +932,23 @@ function App() {
                     )}
 
                     <motion.div
-                      className={`list-item ${isMouseMoving ? "active" : ""}`}
+                      className="list-item"
                       onClick={handleToggleMouse}
-                      onMouseEnter={(e) => handleHoverItem('move_mouse', t('tooltips.move_mouse'), e)}
-                      onMouseLeave={handleLeaveItem}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.05 }}
                       whileHover={{ scale: 1.02, x: 5 }}
                       whileTap={{ scale: 0.98 }}
+                      style={{ position: 'relative' }}
                     >
                       <div className="icon"><MouseIcon /></div>
-                      <span>{t('tabs.move_mouse')}</span>
+                      <span>
+                        {t('tabs.move_mouse')}
+                        <InfoIcon
+                          active={hoveredItem?.id === 'move_mouse'}
+                          onClick={(e) => handleHoverItem('move_mouse', t('tooltips.move_mouse'), e)}
+                        />
+                      </span>
                       <div className={`toggle-switch ${isMouseMoving ? "active" : ""}`}>
                         <div className="toggle-knob"></div>
                       </div>
@@ -943,50 +967,65 @@ function App() {
                     <motion.div
                       className="list-item"
                       onClick={() => { setActiveTab("WhatsApp"); setAppSearchTerm(""); setHoveredItem(null); }}
-                      onMouseEnter={(e) => handleHoverItem('whatsapp', t('tooltips.whatsapp'), e)}
-                      onMouseLeave={handleLeaveItem}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.1 }}
                       whileHover={{ scale: 1.02, x: 5 }}
                       whileTap={{ scale: 0.98 }}
+                      style={{ position: 'relative' }}
                     >
                       <div className="icon"><MsgIcon /></div>
-                      <span>{t('tabs.whatsapp')}</span>
+                      <span>
+                        {t('tabs.whatsapp')}
+                        <InfoIcon
+                          active={hoveredItem?.id === 'whatsapp'}
+                          onClick={(e) => handleHoverItem('whatsapp', t('tooltips.whatsapp'), e)}
+                        />
+                      </span>
                     </motion.div>
 
                     <motion.div
                       className="list-item"
                       onClick={handleExtractText}
-                      onMouseEnter={(e) => handleHoverItem('screenshot', t('tooltips.screenshot'), e)}
-                      onMouseLeave={handleLeaveItem}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.15 }}
                       whileHover={{ scale: 1.02, x: 5 }}
                       whileTap={{ scale: 0.98 }}
+                      style={{ position: 'relative' }}
                     >
                       <div className="icon">
                         <div className="icon"><ScreenshotIcon /></div>
                       </div>
-                      <span>{t('tabs.screenshot')}</span>
+                      <span>
+                        {t('tabs.screenshot')}
+                        <InfoIcon
+                          active={hoveredItem?.id === 'screenshot'}
+                          onClick={(e) => handleHoverItem('screenshot', t('tooltips.screenshot'), e)}
+                        />
+                      </span>
                     </motion.div>
 
                     <motion.div
                       className="list-item"
                       onClick={() => setCloseAppsConfirm("all")}
-                      onMouseEnter={(e) => handleHoverItem('close_apps', t('tooltips.close_apps'), e)}
-                      onMouseLeave={handleLeaveItem}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.2 }}
                       whileHover={{ scale: 1.02, x: 5 }}
                       whileTap={{ scale: 0.98 }}
+                      style={{ position: 'relative' }}
                     >
                       <div className="icon">
                         <div className="icon"><CloseIcon /></div>
                       </div>
-                      <span>{t('tabs.close_apps')}</span>
+                      <span>
+                        {t('tabs.close_apps')}
+                        <InfoIcon
+                          active={hoveredItem?.id === 'close_apps'}
+                          onClick={(e) => handleHoverItem('close_apps', t('tooltips.close_apps'), e)}
+                        />
+                      </span>
                     </motion.div>
 
                     {"schedule shutdown".includes(appSearchTerm.toLowerCase()) && (
@@ -998,15 +1037,22 @@ function App() {
                         <motion.div
                           className="list-item"
                           onClick={() => setShowMainShutdownPicker(!showMainShutdownPicker)}
-                          onMouseEnter={(e) => !showMainShutdownPicker && handleHoverItem('shutdown', t('tooltips.shutdown'), e)}
-                          onMouseLeave={handleLeaveItem}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
                           whileHover={{ scale: 1.02, x: 5 }}
                           whileTap={{ scale: 0.98 }}
+                          style={{ position: 'relative' }}
                         >
                           <div className="icon">
                             <div className="icon"><ShutdownIcon /></div>
                           </div>
-                          <span>{t('tabs.shutdown')}</span>
+                          <span>
+                            {t('tabs.shutdown')}
+                            <InfoIcon
+                              active={hoveredItem?.id === 'shutdown'}
+                              onClick={(e) => handleHoverItem('shutdown', t('tooltips.shutdown'), e)}
+                            />
+                          </span>
                         </motion.div>
 
                         <AnimatePresence>
@@ -1099,77 +1145,97 @@ function App() {
                     <motion.div
                       className="list-item"
                       onClick={() => { setActiveTab("PdfTools"); setAppSearchTerm(""); setHoveredItem(null); }}
-                      onMouseEnter={(e) => handleHoverItem('pdf_to_word', t('tooltips.pdf_to_word'), e)}
-                      onMouseLeave={handleLeaveItem}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.3 }}
                       whileHover={{ scale: 1.02, x: 5 }}
                       whileTap={{ scale: 0.98 }}
+                      style={{ position: 'relative' }}
                     >
                       <div className="icon">
                         <div className="icon">
                           <PdfIcon />
                         </div>
                       </div>
-                      <span>{t('tabs.pdf_to_word')}</span>
+                      <span>
+                        {t('tabs.pdf_to_word')}
+                        <InfoIcon
+                          active={hoveredItem?.id === 'pdf_to_word'}
+                          onClick={(e) => handleHoverItem('pdf_to_word', t('tooltips.pdf_to_word'), e)}
+                        />
+                      </span>
                     </motion.div>
 
                     <motion.div
                       className="list-item"
                       onClick={() => { setActiveTab("ColorPicker"); setHoveredItem(null); }}
-                      onMouseEnter={(e) => handleHoverItem('color_picker', t('tooltips.color_picker'), e)}
-                      onMouseLeave={handleLeaveItem}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.35 }}
                       whileHover={{ scale: 1.02, x: 5 }}
                       whileTap={{ scale: 0.98 }}
+                      style={{ position: 'relative' }}
                     >
                       <div className="icon">
                         <div className="icon">
                           <ColorIcon />
                         </div>
                       </div>
-                      <span>{t('tabs.color_extractor')}</span>
+                      <span>
+                        {t('tabs.color_extractor')}
+                        <InfoIcon
+                          active={hoveredItem?.id === 'color_picker'}
+                          onClick={(e) => handleHoverItem('color_picker', t('tooltips.color_picker'), e)}
+                        />
+                      </span>
                     </motion.div>
 
                     <motion.div
                       className="list-item"
                       onClick={() => togglePaintMode(true)}
-                      onMouseEnter={(e) => handleHoverItem('draw', t('tooltips.draw'), e)}
-                      onMouseLeave={handleLeaveItem}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.4 }}
                       whileHover={{ scale: 1.02, x: 5 }}
                       whileTap={{ scale: 0.98 }}
+                      style={{ position: 'relative' }}
                     >
                       <div className="icon">
                         <div className="icon">
                           <PaintIcon />
                         </div>
                       </div>
-                      <span>{t('tabs.paint')}</span>
+                      <span>
+                        {t('tabs.paint')}
+                        <InfoIcon
+                          active={hoveredItem?.id === 'draw'}
+                          onClick={(e) => handleHoverItem('draw', t('tooltips.draw'), e)}
+                        />
+                      </span>
                     </motion.div>
 
                     <motion.div
                       className="list-item"
                       onClick={() => { setActiveTab("ImageConverter"); setHoveredItem(null); }}
-                      onMouseEnter={(e) => handleHoverItem('image_converter', t('tooltips.image_converter'), e)}
-                      onMouseLeave={handleLeaveItem}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.45 }}
                       whileHover={{ scale: 1.02, x: 5 }}
                       whileTap={{ scale: 0.98 }}
+                      style={{ position: 'relative' }}
                     >
                       <div className="icon">
                         <div className="icon">
                           <ImageIcon />
                         </div>
                       </div>
-                      <span>{t('tabs.image_converter')}</span>
+                      <span>
+                        {t('tabs.image_converter')}
+                        <InfoIcon
+                          active={hoveredItem?.id === 'image_converter'}
+                          onClick={(e) => handleHoverItem('image_converter', t('tooltips.image_converter'), e)}
+                        />
+                      </span>
                     </motion.div>
 
                     {(!appSearchTerm || "profiles".includes(appSearchTerm.toLowerCase()) || "modes".includes(appSearchTerm.toLowerCase())) && (
@@ -1377,21 +1443,6 @@ function App() {
                     </p>
 
                     <motion.div
-                      className={`list-item ${showTooltips ? "active" : ""}`}
-                      onClick={() => setShowTooltips(!showTooltips)}
-                      whileHover={{ scale: 1.02, x: 5 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <div className="icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                      </div>
-                      <span>{t('settings.show_tooltips')}</span>
-                      <div className={`toggle-switch ${showTooltips ? "active" : ""}`}>
-                        <div className="toggle-knob"></div>
-                      </div>
-                    </motion.div>
-
-                    <motion.div
                       className={`list-item ${isAutostartEnabled ? "active" : ""}`}
                       onClick={handleToggleAutostart}
                       whileHover={{ scale: 1.02, x: 5 }}
@@ -1540,7 +1591,7 @@ function App() {
                     <div className="wa-back-btn" onClick={() => { setActiveTab("Main"); setHoveredItem(null); }}>
                       <BackIcon /> <span style={{ marginLeft: '8px' }}>{t('common.back')}</span>
                     </div>
-                    <ImageConverter showToast={showToast} t={t} />
+                    <ImageConverter showToast={showToast} t={t} language={language} />
                   </motion.div>
                 )}
 
@@ -1619,7 +1670,8 @@ function App() {
         <Tooltip
           text={hoveredItem?.text || ""}
           anchorRect={hoveredItem?.rect || null}
-          visible={!!hoveredItem && showTooltips}
+          visible={!!hoveredItem}
+          onClose={() => setHoveredItem(null)}
         />
 
         {pdfConversion.active && (

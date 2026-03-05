@@ -102,6 +102,18 @@ export const translations = {
             toast_success: "Image converted successfully! ✨",
             loading_title: "Converting Image...",
             loading_desc: "This might take a moment depending on the size and format.",
+            pdf_orientation: "Page Orientation",
+            pdf_vertical: "Vertical",
+            pdf_horizontal: "Horizontal",
+            pdf_page_size: "Page Size",
+            pdf_margin: "Margin",
+            pdf_margin_none: "None",
+            pdf_margin_small: "Small",
+            pdf_margin_large: "Large",
+            pdf_merge: "Merge all images into a single PDF",
+            pdf_merge_desc: "Combine multiple files into one",
+            btn_convert_pdf: "Convert to PDF",
+            toast_merge_only: "Only merging files is supported in this version",
         },
         paint: {
             pencil: "Pencil",
@@ -211,7 +223,7 @@ export const translations = {
             pdf_to_word: "Convert PDF files to Word to edit or sign them easily.",
             color_picker: "Extract the exact color from any image or screen area.",
             draw: "Draw, highlight, or add text on your screen and save the image.",
-            image_converter: "Convert images between formats and reduce file size.",
+            image_converter: "Convert images between formats, reduce file size, or convert images to PDF.",
         }
     },
     es: {
@@ -332,6 +344,18 @@ export const translations = {
             toast_success: "¡Imagen convertida con éxito! ✨",
             loading_title: "Convirtiendo Imagen...",
             loading_desc: "Esto puede tardar un momento dependiendo del tamaño y formato.",
+            pdf_orientation: "Orientación de página",
+            pdf_vertical: "Vertical",
+            pdf_horizontal: "Horizontal",
+            pdf_page_size: "Tamaño de página",
+            pdf_margin: "Margen",
+            pdf_margin_none: "Sin margen",
+            pdf_margin_small: "Pequeño",
+            pdf_margin_large: "Grande",
+            pdf_merge: "Unir todas las imágenes en un único PDF",
+            pdf_merge_desc: "Combina varios archivos en uno solo",
+            btn_convert_pdf: "Convertir a PDF",
+            toast_merge_only: "Solo se admite unir archivos en esta versión",
         },
         paint: {
             pencil: "Lápiz",
@@ -419,7 +443,7 @@ export const translations = {
             pdf_to_word: "Convierte archivos PDF a Word para editarlos o firmarlos fácilmente.",
             color_picker: "Extrae el color exacto de cualquier imagen o parte de la pantalla.",
             draw: "Dibuja, resalta o agrega texto sobre tu pantalla y guarda la imagen.",
-            image_converter: "Convierte imágenes entre formatos y reduce su peso sin perder calidad.",
+            image_converter: "Convierte imágenes entre formatos, reduce su peso o convierte tus imágenes a PDF.",
         }
     }
 };
