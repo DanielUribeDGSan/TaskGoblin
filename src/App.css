@@ -90,7 +90,7 @@ body {
   pointer-events: none;
   /* Let clicks pass through to paint UI or others */
   z-index: 1;
-  padding: 40px;
+  padding: 5px 40px 70px 40px;
   /* Space for shadows */
 }
 
@@ -112,7 +112,7 @@ body {
 }
 
 .internal-drag-handle.top {
-  top: 40px;
+  top: 10px;
   left: 40px;
   width: 360px;
   height: 40px;
@@ -120,14 +120,14 @@ body {
 }
 
 .internal-drag-handle.left {
-  top: 40px;
-  left: 0;
+  top: 10px;
+  left: 40px;
   width: 15px;
-  height: calc(100% - 40px);
+  height: 580px;
 }
 
 .internal-drag-handle.right {
-  top: 40px;
+  top: 10px;
   right: 40px;
   width: 15px;
   height: 580px;

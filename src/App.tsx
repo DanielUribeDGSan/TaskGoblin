@@ -267,7 +267,7 @@ function App() {
   const [isPdfEditorActive, setIsPdfEditorActive] = useState(false);
 
   const [showPermissionsCarousel, setShowPermissionsCarousel] = useState(false);
-  const [carouselStep, setCarouselStep] = useState(0); // 0: Accessibility, 1: Screen, 2: Contacts
+  const [carouselStep, setCarouselStep] = useState(0); // 0: Accessibility, 1: Contacts, 2: Screen
   const checkAccessibility = async () => {
     try {
       const isEnabled = await invoke("check_accessibility");
@@ -442,9 +442,9 @@ function App() {
           const status = await invoke("check_all_permissions") as PermissionStatus;
           if (carouselStep === 0 && status.accessibility) {
             setCarouselStep(1);
-          } else if (carouselStep === 1 && status.screen_recording) {
+          } else if (carouselStep === 1 && status.contacts) {
             setCarouselStep(2);
-          } else if (carouselStep === 2 && status.contacts) {
+          } else if (carouselStep === 2 && status.screen_recording) {
             setShowPermissionsCarousel(false);
           }
         } catch (e) {
@@ -1870,19 +1870,19 @@ function App() {
                   )}
                   {carouselStep === 1 && (
                     <motion.div key="step-1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-                      <div style={{ fontSize: '48px', marginBottom: '16px' }}>📸</div>
-                      <h3 style={{ margin: '0 0 8px 0', fontSize: '18px' }}>{t('permissions.screen')}</h3>
+                      <div style={{ fontSize: '48px', marginBottom: '16px' }}>📱</div>
+                      <h3 style={{ margin: '0 0 8px 0', fontSize: '18px' }}>{t('permissions.contacts')}</h3>
                       <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                        {t('permissions.screen_desc')}
+                        {t('permissions.contacts_desc')}
                       </p>
                     </motion.div>
                   )}
                   {carouselStep === 2 && (
                     <motion.div key="step-2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-                      <div style={{ fontSize: '48px', marginBottom: '16px' }}>📱</div>
-                      <h3 style={{ margin: '0 0 8px 0', fontSize: '18px' }}>{t('permissions.contacts')}</h3>
+                      <div style={{ fontSize: '48px', marginBottom: '16px' }}>📸</div>
+                      <h3 style={{ margin: '0 0 8px 0', fontSize: '18px' }}>{t('permissions.screen')}</h3>
                       <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                        {t('permissions.contacts_desc')}
+                        {t('permissions.screen_desc')}
                       </p>
                     </motion.div>
                   )}
@@ -1905,8 +1905,8 @@ function App() {
                 <button
                   onClick={async () => {
                     if (carouselStep === 0) invoke("request_accessibility");
-                    else if (carouselStep === 1) invoke("request_screen_recording");
-                    else if (carouselStep === 2) invoke("request_contacts");
+                    else if (carouselStep === 1) invoke("request_contacts");
+                    else if (carouselStep === 2) invoke("request_screen_recording");
 
                     // Simple refresh check
                     await invoke("check_all_permissions");
