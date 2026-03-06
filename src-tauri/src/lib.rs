@@ -1943,88 +1943,63 @@ async fn save_paint_capture(app_handle: tauri::AppHandle) -> Result<(), String> 
 
     #[cfg(target_os = "macos")]
     {
-        if let Some(window) = app_handle.get_webview_window("main") {
-            let _ = window.hide();
-            // Small delay for animation
-            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        // -x = no sound
+        let output = Command::new("screencapture")
+            .arg("-x")
+            .arg(&save_path_str)
+            .output()
+            .map_err(|e| format!("Failed to capture screen: {}", e))?;
 
-            // -x = no sound
-            let output = Command::new("screencapture")
-                .arg("-x")
-                .arg(&save_path_str)
-                .output()
-                .map_err(|e| format!("Failed to capture screen: {}", e))?;
-
-            let _ = window.show();
-            let _ = window.set_focus();
-
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                return Err(format!("Screencapture failed: {}", stderr));
-            }
-        } else {
-            // Fallback if main window not found (shouldn't happen)
-            let _ = Command::new("screencapture")
-                .arg("-x")
-                .arg(&save_path_str)
-                .output();
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Screencapture failed: {}", stderr));
         }
     }
 
     #[cfg(target_os = "windows")]
     {
-        if let Some(_window) = app_handle.get_webview_window("main") {
-            // Note: We used to hide the window here, but that prevents drawings from being captured.
-            // PaintBoard.tsx handles hiding the toolbar UI before calling this.
-            // let _ = window.hide();
-            // tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        // Use PowerShell to capture the primary screen.
+        // PaintBoard.tsx already handles hiding its toolbar.
+        let ps_script = format!(
+            r#"
+            $ErrorActionPreference = 'Stop'
+            Add-Type -AssemblyName System.Drawing
+            Add-Type -AssemblyName System.Windows.Forms
+            $screen = [System.Windows.Forms.Screen]::PrimaryScreen
+            $width = $screen.Bounds.Width
+            $height = $screen.Bounds.Height
+            $left = $screen.Bounds.Left
+            $top = $screen.Bounds.Top
+            $bmp = New-Object System.Drawing.Bitmap($width, $height)
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($left, $top, 0, 0, $bmp.Size)
+            $bmp.Save('{}', [System.Drawing.Imaging.ImageFormat]::Png)
+            $g.Dispose()
+            $bmp.Dispose()
+            "#,
+            save_path_str.replace("'", "''")
+        );
 
-            // Use PowerShell to capture the primary screen
-            // We need to add System.Windows.Forms to get Screen bounds
-            let ps_script = format!(
-                r#"
-                $ErrorActionPreference = 'Stop'
-                Add-Type -AssemblyName System.Drawing
-                Add-Type -AssemblyName System.Windows.Forms
-                $screen = [System.Windows.Forms.Screen]::PrimaryScreen
-                $width = $screen.Bounds.Width
-                $height = $screen.Bounds.Height
-                $left = $screen.Bounds.Left
-                $top = $screen.Bounds.Top
-                $bmp = New-Object System.Drawing.Bitmap($width, $height)
-                $g = [System.Drawing.Graphics]::FromImage($bmp)
-                $g.CopyFromScreen($left, $top, 0, 0, $bmp.Size)
-                $bmp.Save('{}', [System.Drawing.Imaging.ImageFormat]::Png)
-                $g.Dispose()
-                $bmp.Dispose()
-                "#,
-                save_path_str.replace("'", "''") // Escape single quotes for PowerShell
-            );
+        #[allow(unused_mut)]
+        let mut cmd = Command::new("powershell");
+        cmd.arg("-NoProfile")
+            .arg("-NonInteractive")
+            .arg("-Command")
+            .arg(ps_script);
 
-            #[allow(unused_mut)]
-            let mut cmd = Command::new("powershell");
-            cmd.arg("-NoProfile")
-                .arg("-NonInteractive")
-                .arg("-Command")
-                .arg(ps_script);
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
 
-            #[cfg(target_os = "windows")]
-            {
-                use std::os::windows::process::CommandExt;
-                cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-            }
+        let output = cmd
+            .output()
+            .map_err(|e| format!("Failed to capture screen on Windows: {}", e))?;
 
-            let output = cmd
-                .output()
-                .map_err(|e| format!("Failed to capture screen on Windows: {}", e))?;
-
-            // let _ = window.show();
-            // let _ = window.set_focus();
-
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                return Err(format!("PowerShell capture failed: {}", stderr));
-            }
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("PowerShell capture failed: {}", stderr));
         }
     }
 
