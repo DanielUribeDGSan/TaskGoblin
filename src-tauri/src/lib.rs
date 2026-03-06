@@ -882,7 +882,7 @@ async fn schedule_shutdown(
             tauri::WebviewUrl::App("island.html".into()),
         )
         .title("Shutdown Scheduler")
-        .inner_size(240.0, 60.0)
+        .inner_size(240.0, 75.0)
         .transparent(true)
         .decorations(false)
         .always_on_top(true)
@@ -899,7 +899,7 @@ async fn schedule_shutdown(
                 let monitor_size = monitor.size();
                 let window_size = window
                     .outer_size()
-                    .unwrap_or(tauri::PhysicalSize::new(240, 60));
+                    .unwrap_or(tauri::PhysicalSize::new(240, 75));
                 let x = (monitor_size.width as f64 / 2.0) - (window_size.width as f64 / 2.0);
                 let _ = window.set_position(tauri::Position::Physical(
                     tauri::PhysicalPosition::new(x as i32, 20),
@@ -986,7 +986,7 @@ async fn schedule_shutdown(
             tauri::WebviewUrl::App("island.html".into()),
         )
         .title("Shutdown Scheduler")
-        .inner_size(240.0, 60.0)
+        .inner_size(240.0, 75.0)
         .transparent(true)
         .decorations(false)
         .always_on_top(true)
@@ -1003,7 +1003,7 @@ async fn schedule_shutdown(
                 let mw = monitor.size().width as f64;
                 let ww = island
                     .outer_size()
-                    .unwrap_or(tauri::PhysicalSize::new(240, 60))
+                    .unwrap_or(tauri::PhysicalSize::new(240, 75))
                     .width as f64;
                 let x = mw / 2.0 - ww / 2.0;
                 let _ = island.set_position(tauri::Position::Physical(
@@ -1297,7 +1297,7 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
             tauri::WebviewUrl::App(url.parse().unwrap()),
         )
         .title("OCR Result")
-        .inner_size(240.0, 60.0)
+        .inner_size(240.0, 75.0)
         .transparent(true)
         .decorations(false)
         .always_on_top(true)
@@ -1313,7 +1313,7 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
                 let mw = monitor.size().width as f64;
                 let ww = island
                     .outer_size()
-                    .unwrap_or(tauri::PhysicalSize::new(240, 60))
+                    .unwrap_or(tauri::PhysicalSize::new(240, 75))
                     .width as f64;
                 let x = mw / 2.0 - ww / 2.0;
                 let _ = island.set_position(tauri::Position::Physical(
@@ -1410,7 +1410,7 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
                     tauri::WebviewUrl::App("island.html?mode=ocr&status=loading".parse().unwrap()),
                 )
                 .title("OCR")
-                .inner_size(240.0, 60.0)
+                .inner_size(240.0, 75.0)
                 .transparent(true)
                 .decorations(false)
                 .always_on_top(true)
@@ -1426,7 +1426,7 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
                         let mw = monitor.size().width as f64;
                         let ww = island
                             .outer_size()
-                            .unwrap_or(tauri::PhysicalSize::new(240, 60))
+                            .unwrap_or(tauri::PhysicalSize::new(240, 75))
                             .width as f64;
                         let x = mw / 2.0 - ww / 2.0;
                         let _ = island.set_position(tauri::Position::Physical(
@@ -1610,7 +1610,7 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
             tauri::WebviewUrl::App("island.html?mode=ocr&status=loading".parse().unwrap()),
         )
         .title("OCR")
-        .inner_size(240.0, 60.0)
+        .inner_size(240.0, 75.0)
         .transparent(true)
         .decorations(false)
         .always_on_top(true)
@@ -1625,7 +1625,7 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
                 let mw = monitor.size().width as f64;
                 let ww = island
                     .outer_size()
-                    .unwrap_or(tauri::PhysicalSize::new(240, 60))
+                    .unwrap_or(tauri::PhysicalSize::new(240, 75))
                     .width as f64;
                 let x = mw / 2.0 - ww / 2.0;
                 let _ = island.set_position(tauri::Position::Physical(

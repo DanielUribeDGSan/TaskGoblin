@@ -164,12 +164,7 @@ const ImageConverter: React.FC<{ showToast: (msg: string) => void, t: (key: stri
 
     return (
         <div className="wa-form-container">
-            <div className="color-extractor-header">
-                <h2 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>{t('image.title')}</h2>
-                <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{t('image.desc')}</p>
-            </div>
-
-            <div style={{ marginTop: '20px' }}>
+            <div style={{ marginTop: '0px' }}>
                 <div className="wa-input-group">
                     <label className="wa-input-label" htmlFor="input-origin">{t('image.label_source')}</label>
                     <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>

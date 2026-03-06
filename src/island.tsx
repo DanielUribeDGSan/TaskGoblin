@@ -22,7 +22,7 @@ const pillStyle = {
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: '150px',
-    boxShadow: '0 8px 24px rgba(0,0,0,0.8)',
+    boxShadow: '0 4px 10px rgba(0,0,0,0.6)',
     position: 'relative' as const
 };
 

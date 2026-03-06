@@ -1329,9 +1329,11 @@ body.dark ::-webkit-calendar-picker-indicator {
   color: white !important;
 }
 
-.react-datepicker__day--disabled {
+.react-datepicker__day--disabled,
+.react-datepicker__time-list-item--disabled {
   color: var(--text-secondary) !important;
-  opacity: 0.5;
+  opacity: 0.3 !important;
+  cursor: not-allowed !important;
 }
 
 /* Color Extractor Styles */
@@ -2143,4 +2145,37 @@ body:not(.dark) .sidebar-tooltip-line {
 .file-list-summary::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 10px;
+}
+
+.info-alert-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(var(--accent-color-rgb, 108, 92, 231), 0.1);
+  border: 1px solid rgba(var(--accent-color-rgb, 108, 92, 231), 0.2);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-top: 12px;
+  margin-bottom: 4px;
+}
+
+.info-alert-icon {
+  color: var(--accent-color);
+  flex-shrink: 0;
+  display: flex;
+  margin-top: 2px;
+}
+
+.info-alert-content h4 {
+  margin: 0 0 4px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.info-alert-content p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
 }

@@ -288,7 +288,7 @@ function App() {
   const handleToggleMouse = async () => {
     const isEnabled = await checkAccessibility();
     if (!isEnabled) {
-      showToast("⚠️ Accessibility required for mouse mover");
+      showToast("Accessibility required for mouse mover");
       await requestAccessibility();
       // Also open settings as fallback
       setTimeout(() => invoke("open_accessibility_settings"), 2000);
@@ -519,7 +519,7 @@ function App() {
         // Force window to be interactive again
         await invoke("set_ignore_cursor_events", { ignore: false });
       }
-      showToast(newMode ? "cat mode! 🐾" : "cat mode off... 🏠");
+      showToast(newMode ? "cat mode!" : "cat mode off...");
     } catch (err) {
       showToast("Error toggling cat mode: " + err);
     }
@@ -547,11 +547,11 @@ function App() {
     setCloseAppsConfirm(null);
     if (!action) return;
     try {
-      showToast("Closing applications... 🧹");
+      showToast("Closing applications...");
       if (action === "all") await invoke("close_all_apps");
       else if (action === "leisure") await invoke("close_leisure_apps");
       else if (action === "heavy") await invoke("close_heavy_apps");
-      showToast(action === "all" ? "All apps closed! ✨" : "Apps closed! ✨");
+      showToast(action === "all" ? "All apps closed!" : "Apps closed!");
     } catch (err) {
       console.error(err);
       showToast("Error closing apps: " + String(err));
@@ -729,8 +729,9 @@ function App() {
       }
 
       const delayMs = scheduledDate.getTime() - now.getTime();
-      if (delayMs < 0) {
-        showToast(t('whatsapp.toast_past_date'));
+      const nowFloored = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes());
+      if (scheduledDate.getTime() <= nowFloored.getTime()) {
+        showToast(t('whatsapp.toast_too_soon'));
         return;
       }
 
@@ -808,7 +809,7 @@ function App() {
 
 
 
-          <div className={`sidebar-content ${isPaintActive ? 'hide-for-paint' : ''}`} data-tauri-drag-region>
+          <div className={`sidebar-content ${isPaintActive ? 'hide-for-paint' : ''}`}>
             {closeAppsConfirm && (
               <div className="confirm-overlay" onClick={() => setCloseAppsConfirm(null)}>
                 <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
@@ -902,7 +903,7 @@ function App() {
               )}
             </AnimatePresence>
 
-            <div className="content-area" data-tauri-drag-region ref={scrollContainerRef}>
+            <div className="content-area" ref={scrollContainerRef}>
               <AnimatePresence mode="wait">
                 {activeTab === "Pet" && (
                   <motion.div
@@ -934,7 +935,6 @@ function App() {
                 {activeTab === "Main" && (
                   <motion.div
                     key="main-tab"
-                    data-tauri-drag-region
                     style={{ flex: 1 }}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -943,7 +943,6 @@ function App() {
                     {"main".includes(appSearchTerm.toLowerCase()) && (
                       <motion.div
                         className="section-label"
-                        data-tauri-drag-region
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                       >
@@ -1056,11 +1055,9 @@ function App() {
                       >
                         <motion.div
                           className="list-item"
-                          onClick={() => setShowMainShutdownPicker(!showMainShutdownPicker)}
+                          onClick={() => { setActiveTab("Shutdown"); setAppSearchTerm(""); setHoveredItem(null); }}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
-                          whileHover={{ scale: 1.02, x: 5 }}
-                          whileTap={{ scale: 0.98 }}
                           style={{ position: 'relative' }}
                         >
                           <div className="icon">
@@ -1074,91 +1071,6 @@ function App() {
                             />
                           </span>
                         </motion.div>
-
-                        <AnimatePresence>
-                          {showMainShutdownPicker && (
-                            <motion.div
-                              className="profile-shutdown-picker"
-                              style={{ padding: '0 16px 12px 16px', marginTop: 0, borderTop: 'none', overflow: 'hidden' }}
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                            >
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                <span className="profile-shutdown-label" style={{ margin: 0 }}>{t('shutdown.label_mins')}</span>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setShowMainShutdownPicker(false);
-                                    setScheduleShutdownConfirm("");
-                                  }}
-                                  style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}
-                                  title="Close"
-                                >
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                                </button>
-                              </div>
-                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  placeholder={t('shutdown.placeholder_mins')}
-                                  value={scheduleShutdownConfirm}
-                                  onChange={(e) => setScheduleShutdownConfirm(e.target.value)}
-                                  style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
-                                />
-                              </div>
-
-                              <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                                  <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{t('shutdown.label_close_apps')}</span>
-                                  <div
-                                    onClick={() => setShouldCloseAppsOnShutdown(!shouldCloseAppsOnShutdown)}
-                                    style={{
-                                      width: '36px',
-                                      height: '20px',
-                                      background: shouldCloseAppsOnShutdown ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)',
-                                      borderRadius: '10px',
-                                      position: 'relative',
-                                      cursor: 'pointer',
-                                      transition: 'all 0.3s ease'
-                                    }}
-                                  >
-                                    <div style={{
-                                      width: '16px',
-                                      height: '16px',
-                                      background: 'white',
-                                      borderRadius: '50%',
-                                      position: 'absolute',
-                                      top: '2px',
-                                      left: shouldCloseAppsOnShutdown ? '18px' : '2px',
-                                      transition: 'all 0.3s ease',
-                                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                                    }} />
-                                  </div>
-                                </div>
-                                <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                                  {t('shutdown.desc_close_apps')}
-                                </p>
-                              </div>
-
-                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '12px' }}>
-                                <button
-                                  type="button"
-                                  className="profile-action-btn"
-                                  style={{ margin: 0, padding: '8px 16px', width: 'auto' }}
-                                  onClick={() => {
-                                    if (scheduleShutdownConfirm && Number.parseInt(scheduleShutdownConfirm) > 0) {
-                                      handleScheduleShutdown(Number.parseInt(scheduleShutdownConfirm) * 60);
-                                    }
-                                  }}
-                                >
-                                  {t('shutdown.btn_schedule')}
-                                </button>
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
                       </motion.div>
                     )}
 
@@ -1260,7 +1172,7 @@ function App() {
 
                     {(!appSearchTerm || "profiles".includes(appSearchTerm.toLowerCase()) || "modes".includes(appSearchTerm.toLowerCase())) && (
                       <>
-                        <div className="section-label" style={{ marginTop: '20px' }} data-tauri-drag-region>{t('sidebar.profiles')}</div>
+                        <div className="section-label" style={{ marginTop: '20px' }}>{t('sidebar.profiles')}</div>
                         <div className="list-item" onClick={() => { setActiveTab("Profiles"); setAppSearchTerm(""); setHoveredItem(null); }}>
                           <div className="icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
@@ -1271,7 +1183,7 @@ function App() {
                     )}
 
                     {/* Added a filler visual structure just to make it look like the long mockup */}
-                    {"others".includes(appSearchTerm.toLowerCase()) && <div className="section-label" style={{ marginTop: '20px' }} data-tauri-drag-region>OTHERS</div>}
+                    {"others".includes(appSearchTerm.toLowerCase()) && <div className="section-label" style={{ marginTop: '20px' }}>OTHERS</div>}
 
                     {"notifications".includes(appSearchTerm.toLowerCase()) && (
                       <motion.div
@@ -1318,8 +1230,18 @@ function App() {
                     exit={{ opacity: 0, x: -20, pointerEvents: 'none' }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
                   >
-                    <div className="wa-back-btn" onClick={() => { setActiveTab("Main"); setHoveredItem(null); }}>
-                      <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> Back
+                    <div className="info-alert-card" style={{ marginTop: 0, marginBottom: '16px' }}>
+                      <div className="info-alert-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                      </div>
+                      <div className="info-alert-content">
+                        <h4>{t('profiles_view.info_title')}</h4>
+                        <p>{t('profiles_view.info_desc')}</p>
+                      </div>
+                    </div>
+
+                    <div className="wa-back-btn" onClick={() => { setActiveTab("Main"); setHoveredItem(null); }} style={{ marginBottom: '16px' }}>
+                      <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> {t('common.back')}
                     </div>
                     <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
                       {t('profiles_view.desc')}
@@ -1333,7 +1255,6 @@ function App() {
                       whileHover={{ scale: 1.01 }}
                     >
                       <div className="profile-mode-header">
-                        <span className="profile-mode-icon">💼</span>
                         <span className="profile-mode-title">{t('profiles_view.work_title')}</span>
                       </div>
                       <div className="profile-mode-actions">
@@ -1354,7 +1275,6 @@ function App() {
                       whileHover={{ scale: 1.01 }}
                     >
                       <div className="profile-mode-header">
-                        <span className="profile-mode-icon">🎮</span>
                         <span className="profile-mode-title">{t('profiles_view.gaming_title')}</span>
                       </div>
                       <div className="profile-mode-actions">
@@ -1375,7 +1295,6 @@ function App() {
                       whileHover={{ scale: 1.01 }}
                     >
                       <div className="profile-mode-header">
-                        <span className="profile-mode-icon">🌙</span>
                         <span className="profile-mode-title">{t('profiles_view.sleep_title')}</span>
                       </div>
                       <div className="profile-mode-actions">
@@ -1508,6 +1427,16 @@ function App() {
                       <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> {t('common.back')}
                     </div>
 
+                    <div className="info-alert-card">
+                      <div className="info-alert-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                      </div>
+                      <div className="info-alert-content">
+                        <h4>{t('whatsapp.info_title')}</h4>
+                        <p>{t('whatsapp.info_desc')}</p>
+                      </div>
+                    </div>
+
                     <ContactPicker
                       contacts={contacts}
                       onSelect={(c) => {
@@ -1589,6 +1518,15 @@ function App() {
                           className="custom-datepicker"
                           placeholderText={t('common.select')}
                           portalId="root"
+                          filterTime={(time: Date) => {
+                            const now = new Date();
+                            const selected = waDateTime || now;
+                            if (selected.toDateString() === now.toDateString()) {
+                              const nowFloored = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes());
+                              return time.getTime() > nowFloored.getTime();
+                            }
+                            return true;
+                          }}
                         />
                       </div>
                     </div>
@@ -1615,6 +1553,82 @@ function App() {
                   </motion.div>
                 )}
 
+
+
+                {activeTab === "Shutdown" && (
+                  <motion.div
+                    key="shutdown-tab"
+                    className="wa-form-container profiles-container"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20, pointerEvents: 'none' }}
+                    transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                  >
+                    <div className="wa-back-btn" onClick={() => { setActiveTab("Main"); setHoveredItem(null); }}>
+                      <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> {t('common.back')}
+                    </div>
+
+                    <div className="wa-input-group" style={{ marginTop: '16px' }}>
+                      <label className="wa-form-label">{t('shutdown.label_mins')}</label>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder={t('shutdown.placeholder_mins')}
+                        value={scheduleShutdownConfirm}
+                        onChange={(e) => setScheduleShutdownConfirm(e.target.value)}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+
+                    <div style={{ marginTop: '16px', padding: '16px', background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>{t('shutdown.label_close_apps')}</span>
+                        <div
+                          onClick={() => setShouldCloseAppsOnShutdown(!shouldCloseAppsOnShutdown)}
+                          style={{
+                            width: '40px',
+                            height: '24px',
+                            background: shouldCloseAppsOnShutdown ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)',
+                            borderRadius: '12px',
+                            position: 'relative',
+                            cursor: 'pointer',
+                            transition: 'all 0.3s ease'
+                          }}
+                        >
+                          <div style={{
+                            width: '20px',
+                            height: '20px',
+                            background: 'white',
+                            borderRadius: '50%',
+                            position: 'absolute',
+                            top: '2px',
+                            left: shouldCloseAppsOnShutdown ? '18px' : '2px',
+                            transition: 'all 0.3s ease',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                          }} />
+                        </div>
+                      </div>
+                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                        {t('shutdown.desc_close_apps')}
+                      </p>
+                    </div>
+
+                    <button
+                      className="wa-submit-btn"
+                      onClick={() => {
+                        if (scheduleShutdownConfirm && Number.parseInt(scheduleShutdownConfirm) > 0) {
+                          handleScheduleShutdown(Number.parseInt(scheduleShutdownConfirm) * 60);
+                          setActiveTab("Main");
+                          setScheduleShutdownConfirm("");
+                        }
+                      }}
+                      style={{ marginTop: '24px', width: '100%' }}
+                    >
+                      {t('shutdown.btn_schedule')}
+                    </button>
+                  </motion.div>
+                )}
+
                 {activeTab === "PdfTools" && (
                   <motion.div
                     key="pdf-tools-tab"
@@ -1637,10 +1651,20 @@ function App() {
                       whileHover={{ scale: 1.01 }}
                       style={{ marginBottom: '16px' }}
                     >
-                      <div className="profile-mode-header">
-                        <span className="profile-mode-icon">📄</span>
-                        <span className="profile-mode-title">{t('pdf_tools.convert_title') || 'Convert to Word'}</span>
+                      <div className="profile-mode-header" style={{ marginBottom: '8px' }}>
+                        <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--text-primary)' }}>{t('pdf_tools.convert_title') || 'Convert to Word'}</h3>
                       </div>
+
+                      <div className="info-alert-card" style={{ marginTop: 0, marginBottom: '12px', padding: '10px 12px', background: 'rgba(var(--accent-color-rgb, 108, 92, 231), 0.05)' }}>
+                        <div className="info-alert-icon">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                        </div>
+                        <div className="info-alert-content">
+                          <h4 style={{ margin: '0 0 2px 0', fontSize: '12px' }}>{t('pdf_tools.info_title')}</h4>
+                          <p style={{ margin: 0, fontSize: '11px' }}>{t('pdf_tools.info_desc')}</p>
+                        </div>
+                      </div>
+
                       <div className="profile-mode-actions">
                         <button type="button" className="profile-action-btn" onClick={handleConvertPdf} style={{ background: 'var(--accent-color)', color: '#fff', border: 'none' }}>
                           {t('pdf_tools.convert_btn') || 'Select & Convert'}
@@ -1655,9 +1679,8 @@ function App() {
                       transition={{ delay: 0.2 }}
                       whileHover={{ scale: 1.01 }}
                     >
-                      <div className="profile-mode-header">
-                        <span className="profile-mode-icon">🖋️</span>
-                        <span className="profile-mode-title">{t('pdf_tools.edit_title') || 'Edit & Sign Native PDF'}</span>
+                      <div className="profile-mode-header" style={{ marginBottom: '8px' }}>
+                        <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--text-primary)' }}>{t('pdf_tools.edit_title') || 'Edit & Sign Native PDF'}</h3>
                       </div>
                       <div className="profile-mode-actions">
                         <button type="button" className="profile-action-btn" onClick={() => {
@@ -1680,7 +1703,6 @@ function App() {
 
         {toast.visible && (
           <div className={`toast-notification ${toast.visible ? 'visible' : ''}`}>
-            <span style={{ marginRight: '8px' }}>✨</span>
             {toast.message}
           </div>
         )}
