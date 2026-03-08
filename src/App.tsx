@@ -1580,7 +1580,7 @@ function App() {
                       />
                     </div>
 
-                    <div style={{ marginTop: '16px', padding: '16px', background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                    {/* <div style={{ marginTop: '16px', padding: '16px', background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                         <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>{t('shutdown.label_close_apps')}</span>
                         <div
@@ -1611,7 +1611,7 @@ function App() {
                       <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
                         {t('shutdown.desc_close_apps')}
                       </p>
-                    </div>
+                    </div> */}
 
                     <button
                       className="wa-submit-btn"
