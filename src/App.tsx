@@ -261,7 +261,8 @@ function App() {
   const [scheduleShutdownPicker, setScheduleShutdownPicker] = useState(false);
   const [scheduleShutdownConfirm, setScheduleShutdownConfirm] = useState<string>(""); // minutes
   const [showMainShutdownPicker, setShowMainShutdownPicker] = useState<boolean>(false);
-  const [shouldCloseAppsOnShutdown, setShouldCloseAppsOnShutdown] = useState(false);
+  // const [shouldCloseAppsOnShutdown, setShouldCloseAppsOnShutdown] = useState(false);
+  const shouldCloseAppsOnShutdown = false; // Fixed value since UI is commented out
   const [isPaintActive, setIsPaintActive] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<{ id: string; text: string; rect: DOMRect } | null>(null);
   const [isPdfEditorActive, setIsPdfEditorActive] = useState(false);
