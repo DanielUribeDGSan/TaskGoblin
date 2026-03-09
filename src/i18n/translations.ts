@@ -186,6 +186,8 @@ export const translations = {
         },
         settings_view: {
             desc: "App configuration and behavior.",
+            register_license: "Register License",
+            register_license_desc: "Enter your key to unlock unrestricted access",
         },
         support: {
             title: "SUPPORT",
@@ -212,7 +214,23 @@ export const translations = {
             title: "Settings",
             show_tooltips: "Show Tooltips (Help)",
             autostart: "Start on Login",
-            language: "Language"
+            language: "Language",
+            license: "License Registration"
+        },
+        license: {
+            form_title: "Validate License",
+            form_desc: "Register your license key to unlock the app permanently.",
+            label_email: "Email address",
+            placeholder_email: "you@example.com",
+            label_key: "License Key",
+            placeholder_key: "Enter your license",
+            btn_activate: "Activate License",
+            btn_validating: "Validating...",
+            toast_success: "License validated successfully!",
+            in_use_msg: "This license is being used on another device. Unbind the other device and transfer here?",
+            btn_transfer: "Transfer License",
+            btn_transferring: "Transferring...",
+            buy_link: "Get a license",
         },
         ocr: {
             success: "Text Copied!",
@@ -248,7 +266,23 @@ export const translations = {
             title: "Configuración",
             show_tooltips: "Mostrar Tooltips (Ayuda)",
             autostart: "Iniciar al arrancar sesión",
-            language: "Idioma"
+            language: "Idioma",
+            license: "Registro de Licencia"
+        },
+        license: {
+            form_title: "Validar Licencia",
+            form_desc: "Registra tu clave de licencia para desbloquear la app de forma permanente.",
+            label_email: "Correo electrónico",
+            placeholder_email: "tu@ejemplo.com",
+            label_key: "Clave de Licencia",
+            placeholder_key: "Ingresa tu licencia",
+            btn_activate: "Activar Licencia",
+            btn_validating: "Validando...",
+            toast_success: "¡Licencia validada con éxito!",
+            in_use_msg: "Esta licencia ya se usa en otro dispositivo. ¿Deseas cerrarla en el otro dispositivo y activarla aquí?",
+            btn_transfer: "Transferir Licencia",
+            btn_transferring: "Transfiriendo...",
+            buy_link: "Obtener una licencia",
         },
         common: {
             back: "Volver",
@@ -435,6 +469,8 @@ export const translations = {
         },
         settings_view: {
             desc: "Configuración y comportamiento de la app.",
+            register_license: "Registrar Licencia",
+            register_license_desc: "Ingresa tu clave para desbloquear el acceso ilimitado",
         },
         support: {
             title: "SOPORTE",

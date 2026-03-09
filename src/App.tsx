@@ -13,6 +13,7 @@ import ColorExtractor from './components/ColorExtractor';
 import PaintBoard from './components/PaintBoard';
 import ImageConverter from './components/ImageConverter';
 import PdfEditor from './components/PdfEditor';
+import LicenseScreen from './components/LicenseScreen';
 import { translations, Language } from "./i18n/translations";
 import "./App.css";
 
@@ -232,6 +233,9 @@ function App() {
   const [contactError, setContactError] = useState<string | null>(null);
   const [language, setLanguage] = useState<Language>(() => {
     return (localStorage.getItem('app-language') as Language) || 'es';
+  });
+  const [isLicenseValid, setIsLicenseValid] = useState(() => {
+    return localStorage.getItem("app-license-valid") === "true";
   });
 
   const t = (path: string): string => {
@@ -1412,6 +1416,46 @@ function App() {
                         <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{t('support.repair_desc')}</span>
                       </div>
                     </motion.div>
+
+                    <div className="section-label" style={{ marginTop: '20px' }}>Licencia</div>
+                    <motion.div
+                      className="list-item"
+                      onClick={() => setActiveTab("License")}
+                      whileHover={{ scale: 1.02, x: 5 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <div className="icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span>{t('settings_view.register_license')}</span>
+                        <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
+                          {isLicenseValid ? t('license.toast_success') : t('settings_view.register_license_desc')}
+                        </span>
+                      </div>
+                      {isLicenseValid && (
+                        <div style={{ marginLeft: 'auto', color: '#10b981' }}>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        </div>
+                      )}
+                    </motion.div>
+                  </motion.div>
+                )}
+
+                {activeTab === "License" && (
+                  <motion.div
+                    key="license-tab"
+                    className="wa-form-container"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20, pointerEvents: 'none' }}
+                    transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                  >
+                    <div className="wa-back-btn" onClick={() => { setActiveTab("Settings"); setHoveredItem(null); }}>
+                      <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> {t('common.back')}
+                    </div>
+
+                    <LicenseScreen onValidated={() => setIsLicenseValid(true)} t={t} />
                   </motion.div>
                 )}
 
