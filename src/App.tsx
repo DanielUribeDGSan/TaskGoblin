@@ -237,6 +237,21 @@ function App() {
   const [isLicenseValid, setIsLicenseValid] = useState(() => {
     return localStorage.getItem("app-license-valid") === "true";
   });
+  const [installDate] = useState(() => {
+    let dateStr = localStorage.getItem("app-install-date");
+    if (!dateStr) {
+      dateStr = new Date().toISOString();
+      localStorage.setItem("app-install-date", dateStr);
+    }
+    return new Date(dateStr);
+  });
+
+  const trialDurationHours = 24;
+  const now = new Date();
+  const hoursSinceInstall = (now.getTime() - installDate.getTime()) / (1000 * 60 * 60);
+  const trialExpired = hoursSinceInstall >= trialDurationHours;
+  const trialHoursRemaining = Math.max(0, Math.ceil(trialDurationHours - hoursSinceInstall));
+  const isLocked = trialExpired && !isLicenseValid;
 
   const t = (path: string): string => {
     const keys = path.split('.');
@@ -955,15 +970,28 @@ function App() {
                       </motion.div>
                     )}
 
+                    {!isLicenseValid && (
+                      <div className="info-alert-card" style={{ marginBottom: '16px', marginTop: '4px', background: trialExpired ? 'rgba(255,85,85,0.1)' : 'rgba(108, 92, 231, 0.1)', borderColor: trialExpired ? 'rgba(255,85,85,0.2)' : 'rgba(108, 92, 231, 0.2)' }}>
+                        <div className="info-alert-icon" style={{ color: trialExpired ? '#ff5555' : 'var(--accent-color)' }}>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                        </div>
+                        <div className="info-alert-content">
+                          <p style={{ margin: 0, fontSize: '12px', color: trialExpired ? '#ff5555' : 'var(--text-primary)', fontWeight: 500, lineHeight: 1.4 }}>
+                            {trialExpired ? t('trial.expired') : t('trial.expires_in').replace('{hours}', trialHoursRemaining.toString())}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     <motion.div
                       className="list-item"
-                      onClick={handleToggleMouse}
+                      onClick={isLocked ? undefined : handleToggleMouse}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.05 }}
-                      whileHover={{ scale: 1.02, x: 5 }}
-                      whileTap={{ scale: 0.98 }}
-                      style={{ position: 'relative' }}
+                      whileHover={isLocked ? {} : { scale: 1.02, x: 5 }}
+                      whileTap={isLocked ? {} : { scale: 0.98 }}
+                      style={{ position: 'relative', opacity: isLocked ? 0.5 : 1, pointerEvents: isLocked ? 'none' : 'auto' }}
                     >
                       <div className="icon"><MouseIcon /></div>
                       <span>
@@ -990,13 +1018,13 @@ function App() {
 
                     <motion.div
                       className="list-item"
-                      onClick={() => { setActiveTab("WhatsApp"); setAppSearchTerm(""); setHoveredItem(null); }}
+                      onClick={isLocked ? undefined : () => { setActiveTab("WhatsApp"); setAppSearchTerm(""); setHoveredItem(null); }}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.1 }}
-                      whileHover={{ scale: 1.02, x: 5 }}
-                      whileTap={{ scale: 0.98 }}
-                      style={{ position: 'relative' }}
+                      whileHover={isLocked ? {} : { scale: 1.02, x: 5 }}
+                      whileTap={isLocked ? {} : { scale: 0.98 }}
+                      style={{ position: 'relative', opacity: isLocked ? 0.5 : 1, pointerEvents: isLocked ? 'none' : 'auto' }}
                     >
                       <div className="icon"><MsgIcon /></div>
                       <span>
@@ -1010,13 +1038,13 @@ function App() {
 
                     <motion.div
                       className="list-item"
-                      onClick={handleExtractText}
+                      onClick={isLocked ? undefined : handleExtractText}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.15 }}
-                      whileHover={{ scale: 1.02, x: 5 }}
-                      whileTap={{ scale: 0.98 }}
-                      style={{ position: 'relative' }}
+                      whileHover={isLocked ? {} : { scale: 1.02, x: 5 }}
+                      whileTap={isLocked ? {} : { scale: 0.98 }}
+                      style={{ position: 'relative', opacity: isLocked ? 0.5 : 1, pointerEvents: isLocked ? 'none' : 'auto' }}
                     >
                       <div className="icon">
                         <div className="icon"><ScreenshotIcon /></div>
@@ -1032,13 +1060,13 @@ function App() {
 
                     <motion.div
                       className="list-item"
-                      onClick={() => setCloseAppsConfirm("all")}
+                      onClick={isLocked ? undefined : () => setCloseAppsConfirm("all")}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.2 }}
-                      whileHover={{ scale: 1.02, x: 5 }}
-                      whileTap={{ scale: 0.98 }}
-                      style={{ position: 'relative' }}
+                      whileHover={isLocked ? {} : { scale: 1.02, x: 5 }}
+                      whileTap={isLocked ? {} : { scale: 0.98 }}
+                      style={{ position: 'relative', opacity: isLocked ? 0.5 : 1, pointerEvents: isLocked ? 'none' : 'auto' }}
                     >
                       <div className="icon">
                         <div className="icon"><CloseIcon /></div>
@@ -1060,10 +1088,10 @@ function App() {
                       >
                         <motion.div
                           className="list-item"
-                          onClick={() => { setActiveTab("Shutdown"); setAppSearchTerm(""); setHoveredItem(null); }}
+                          onClick={isLocked ? undefined : () => { setActiveTab("Shutdown"); setAppSearchTerm(""); setHoveredItem(null); }}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
-                          style={{ position: 'relative' }}
+                          style={{ position: 'relative', opacity: isLocked ? 0.5 : 1, pointerEvents: isLocked ? 'none' : 'auto' }}
                         >
                           <div className="icon">
                             <div className="icon"><ShutdownIcon /></div>
@@ -1081,13 +1109,13 @@ function App() {
 
                     <motion.div
                       className="list-item"
-                      onClick={() => { setActiveTab("PdfTools"); setAppSearchTerm(""); setHoveredItem(null); }}
+                      onClick={isLocked ? undefined : () => { setActiveTab("PdfTools"); setAppSearchTerm(""); setHoveredItem(null); }}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.3 }}
-                      whileHover={{ scale: 1.02, x: 5 }}
-                      whileTap={{ scale: 0.98 }}
-                      style={{ position: 'relative' }}
+                      whileHover={isLocked ? {} : { scale: 1.02, x: 5 }}
+                      whileTap={isLocked ? {} : { scale: 0.98 }}
+                      style={{ position: 'relative', opacity: isLocked ? 0.5 : 1, pointerEvents: isLocked ? 'none' : 'auto' }}
                     >
                       <div className="icon">
                         <div className="icon">
@@ -1105,13 +1133,13 @@ function App() {
 
                     <motion.div
                       className="list-item"
-                      onClick={() => { setActiveTab("ColorPicker"); setHoveredItem(null); }}
+                      onClick={isLocked ? undefined : () => { setActiveTab("ColorPicker"); setHoveredItem(null); }}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.35 }}
-                      whileHover={{ scale: 1.02, x: 5 }}
-                      whileTap={{ scale: 0.98 }}
-                      style={{ position: 'relative' }}
+                      whileHover={isLocked ? {} : { scale: 1.02, x: 5 }}
+                      whileTap={isLocked ? {} : { scale: 0.98 }}
+                      style={{ position: 'relative', opacity: isLocked ? 0.5 : 1, pointerEvents: isLocked ? 'none' : 'auto' }}
                     >
                       <div className="icon">
                         <div className="icon">
@@ -1129,13 +1157,13 @@ function App() {
 
                     <motion.div
                       className="list-item"
-                      onClick={() => togglePaintMode(true)}
+                      onClick={isLocked ? undefined : () => togglePaintMode(true)}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.4 }}
-                      whileHover={{ scale: 1.02, x: 5 }}
-                      whileTap={{ scale: 0.98 }}
-                      style={{ position: 'relative' }}
+                      whileHover={isLocked ? {} : { scale: 1.02, x: 5 }}
+                      whileTap={isLocked ? {} : { scale: 0.98 }}
+                      style={{ position: 'relative', opacity: isLocked ? 0.5 : 1, pointerEvents: isLocked ? 'none' : 'auto' }}
                     >
                       <div className="icon">
                         <div className="icon">
@@ -1153,13 +1181,13 @@ function App() {
 
                     <motion.div
                       className="list-item"
-                      onClick={() => { setActiveTab("ImageConverter"); setHoveredItem(null); }}
+                      onClick={isLocked ? undefined : () => { setActiveTab("ImageConverter"); setHoveredItem(null); }}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.45 }}
-                      whileHover={{ scale: 1.02, x: 5 }}
-                      whileTap={{ scale: 0.98 }}
-                      style={{ position: 'relative' }}
+                      whileHover={isLocked ? {} : { scale: 1.02, x: 5 }}
+                      whileTap={isLocked ? {} : { scale: 0.98 }}
+                      style={{ position: 'relative', opacity: isLocked ? 0.5 : 1, pointerEvents: isLocked ? 'none' : 'auto' }}
                     >
                       <div className="icon">
                         <div className="icon">
@@ -1178,7 +1206,7 @@ function App() {
                     {(!appSearchTerm || "profiles".includes(appSearchTerm.toLowerCase()) || "modes".includes(appSearchTerm.toLowerCase())) && (
                       <>
                         <div className="section-label" style={{ marginTop: '20px' }}>{t('sidebar.profiles')}</div>
-                        <div className="list-item" onClick={() => { setActiveTab("Profiles"); setAppSearchTerm(""); setHoveredItem(null); }}>
+                        <div className="list-item" onClick={isLocked ? undefined : () => { setActiveTab("Profiles"); setAppSearchTerm(""); setHoveredItem(null); }} style={{ opacity: isLocked ? 0.5 : 1, pointerEvents: isLocked ? 'none' : 'auto' }}>
                           <div className="icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                           </div>
@@ -1196,8 +1224,9 @@ function App() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.5 }}
-                        whileHover={{ scale: 1.02, x: 5 }}
-                        whileTap={{ scale: 0.98 }}
+                        whileHover={isLocked ? {} : { scale: 1.02, x: 5 }}
+                        whileTap={isLocked ? {} : { scale: 0.98 }}
+                        style={{ opacity: isLocked ? 0.5 : 1, pointerEvents: isLocked ? 'none' : 'auto' }}
                       >
                         <div className="icon">
                           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
@@ -1455,7 +1484,10 @@ function App() {
                       <span style={{ fontSize: '16px', marginRight: '6px' }}>←</span> {t('common.back')}
                     </div>
 
-                    <LicenseScreen onValidated={() => setIsLicenseValid(true)} t={t} />
+                    <LicenseScreen onValidated={() => {
+                      setIsLicenseValid(true);
+                      showToast(t('license.toast_success'));
+                    }} t={t} />
                   </motion.div>
                 )}
 

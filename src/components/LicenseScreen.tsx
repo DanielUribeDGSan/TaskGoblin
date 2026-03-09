@@ -1,6 +1,22 @@
 import React, { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 
+const EyeIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
+        <circle cx="12" cy="12" r="3" />
+    </svg>
+);
+
+const EyeOffIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+        <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+        <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+        <line x1="2" y1="2" x2="22" y2="22" />
+    </svg>
+);
+
 // Make sure these are properly configured in your .env
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
@@ -21,8 +37,9 @@ const generateDeviceId = () => {
 };
 
 export default function LicenseScreen({ onValidated, t }: LicenseScreenProps) {
-    const [email, setEmail] = useState("");
-    const [licenseKey, setLicenseKey] = useState("");
+    const [email, setEmail] = useState(() => localStorage.getItem("app-email") || "");
+    const [licenseKey, setLicenseKey] = useState(() => localStorage.getItem("app-license-key") || "");
+    const [showKey, setShowKey] = useState(false);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const [unbindPrompt, setUnbindPrompt] = useState<{ id: string } | null>(null);
@@ -76,6 +93,8 @@ export default function LicenseScreen({ onValidated, t }: LicenseScreenProps) {
 
             // Validated successfully
             localStorage.setItem("app-license-valid", "true");
+            localStorage.setItem("app-email", email);
+            localStorage.setItem("app-license-key", licenseKey);
             onValidated();
 
         } catch (err: any) {
@@ -102,6 +121,8 @@ export default function LicenseScreen({ onValidated, t }: LicenseScreenProps) {
             }
 
             localStorage.setItem("app-license-valid", "true");
+            localStorage.setItem("app-email", email);
+            localStorage.setItem("app-license-key", licenseKey);
             onValidated();
         } catch (err: any) {
             setError(err.message || "Failed to unbind from previous device.");
@@ -142,15 +163,38 @@ export default function LicenseScreen({ onValidated, t }: LicenseScreenProps) {
                     />
 
                     <label className="wa-form-label" style={{ marginTop: '16px' }}>{t('license.label_key')}</label>
-                    <input
-                        type="text"
-                        required
-                        value={licenseKey}
-                        onChange={(e) => setLicenseKey(e.target.value)}
-                        placeholder={t('license.placeholder_key')}
-                        className="wa-input"
-                        style={{ width: '100%' }}
-                    />
+                    <div style={{ position: 'relative' }}>
+                        <input
+                            type={showKey ? "text" : "password"}
+                            required
+                            value={licenseKey}
+                            onChange={(e) => setLicenseKey(e.target.value)}
+                            placeholder={t('license.placeholder_key')}
+                            className="wa-input"
+                            style={{ width: '100%', paddingRight: '40px' }}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setShowKey(!showKey)}
+                            title={showKey ? t('license.hide_key') : t('license.show_key')}
+                            style={{
+                                position: 'absolute',
+                                right: '10px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'var(--text-secondary)',
+                                cursor: 'pointer',
+                                padding: '4px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                            }}
+                        >
+                            {showKey ? <EyeOffIcon /> : <EyeIcon />}
+                        </button>
+                    </div>
 
                     <button
                         className="wa-submit-btn"

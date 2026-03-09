@@ -231,6 +231,12 @@ export const translations = {
             btn_transfer: "Transfer License",
             btn_transferring: "Transferring...",
             buy_link: "Get a license",
+            show_key: "Show license key",
+            hide_key: "Hide license key",
+        },
+        trial: {
+            expires_in: "Trial expires in {hours} hours.",
+            expired: "Trial period has ended. Please purchase and register a license to continue using the app.",
         },
         ocr: {
             success: "Text Copied!",
@@ -283,6 +289,12 @@ export const translations = {
             btn_transfer: "Transferir Licencia",
             btn_transferring: "Transfiriendo...",
             buy_link: "Obtener una licencia",
+            show_key: "Mostrar clave de licencia",
+            hide_key: "Ocultar clave de licencia",
+        },
+        trial: {
+            expires_in: "La prueba caduca en {hours} horas.",
+            expired: "El período de prueba ha terminado. Por favor, adquiere y registra una licencia para seguir usando la app.",
         },
         common: {
             back: "Volver",
