@@ -14,6 +14,7 @@ import PaintBoard from './components/PaintBoard';
 import ImageConverter from './components/ImageConverter';
 import PdfEditor from './components/PdfEditor';
 import LicenseScreen from './components/LicenseScreen';
+import { checkLicenseStatus } from "./utils/license";
 import { translations, Language } from "./i18n/translations";
 import "./App.css";
 
@@ -296,6 +297,40 @@ function App() {
       return false;
     }
   };
+
+  // Periodic License Validation (Every 24 hours)
+  useEffect(() => {
+    if (!isLicenseValid) return;
+
+    const performBackgroundCheck = async () => {
+      const email = localStorage.getItem("app-email");
+      const key = localStorage.getItem("app-license-key");
+      const lastCheck = localStorage.getItem("app-last-license-check");
+
+      if (!email || !key) return;
+
+      const now = new Date();
+      const lastCheckDate = lastCheck ? new Date(lastCheck) : new Date(0);
+      const diffHours = (now.getTime() - lastCheckDate.getTime()) / (1000 * 60 * 60);
+
+      // Only check if 24 hours have passed
+      if (diffHours >= 24) {
+        console.log("Performing periodic license validation...");
+        const result = await checkLicenseStatus(email, key);
+
+        if (result.status === "valid") {
+          localStorage.setItem("app-last-license-check", now.toISOString());
+        } else if (result.status === "invalid" || result.status === "mismatch") {
+          console.warn("License no longer valid or bound to another device.");
+          setIsLicenseValid(false);
+          localStorage.setItem("app-license-valid", "false");
+          showToast(t('license.toast_invalidated') || "License no longer valid for this device.");
+        }
+      }
+    };
+
+    performBackgroundCheck();
+  }, [isLicenseValid]);
 
   const requestAccessibility = async () => {
     try {

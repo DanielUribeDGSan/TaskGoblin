@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { createClient } from "@supabase/supabase-js";
+import React, { useState } from "react";
+import { checkLicenseStatus, bindLicense } from "../utils/license";
 
 const EyeIcon = () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -17,24 +17,10 @@ const EyeOffIcon = () => (
     </svg>
 );
 
-// Make sure these are properly configured in your .env
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-const supabase = createClient(supabaseUrl, supabaseKey);
-
 interface LicenseScreenProps {
     onValidated: () => void;
     t: (key: string) => string;
 }
-
-const generateDeviceId = () => {
-    let deviceId = localStorage.getItem("app-device-id");
-    if (!deviceId) {
-        deviceId = crypto.randomUUID();
-        localStorage.setItem("app-device-id", deviceId);
-    }
-    return deviceId;
-};
 
 export default function LicenseScreen({ onValidated, t }: LicenseScreenProps) {
     const [email, setEmail] = useState(() => localStorage.getItem("app-email") || "");
@@ -44,55 +30,35 @@ export default function LicenseScreen({ onValidated, t }: LicenseScreenProps) {
     const [loading, setLoading] = useState(false);
     const [unbindPrompt, setUnbindPrompt] = useState<{ id: string } | null>(null);
 
-    useEffect(() => {
-        // Basic config check
-        if (!supabaseUrl || !supabaseKey) {
-            console.warn("Supabase configuration is missing!");
-        }
-    }, []);
-
     const handleValidate = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
         setLoading(true);
 
         try {
-            const deviceId = generateDeviceId();
+            const result = await checkLicenseStatus(email, licenseKey);
 
-            // Query the license from Supabase
-            const { data, error: fetchError } = await supabase
-                .from("licenses")
-                .select("*")
-                .eq("email", email)
-                .eq("license_key", licenseKey)
-                .single();
-
-            if (fetchError || !data) {
-                throw new Error("License not found or invalid email.");
+            if (result.status === "invalid") {
+                throw new Error(t('license.error_invalid') || "License not found or invalid email.");
             }
 
-            // Check device binding
-            if (data.device_id && data.device_id !== deviceId) {
-                // License is bound to another device
-                setUnbindPrompt({ id: data.id });
+            if (result.status === "mismatch" && result.id) {
+                setUnbindPrompt({ id: result.id });
                 setLoading(false);
                 return;
             }
 
-            if (!data.device_id) {
-                // Bind to current device
-                const { error: updateError } = await supabase
-                    .from("licenses")
-                    .update({ device_id: deviceId })
-                    .eq("id", data.id);
+            if (result.status === "error") {
+                throw new Error("Validation error.");
+            }
 
-                if (updateError) {
-                    throw new Error("Error binding license to this device.");
-                }
+            if (result.id) {
+                await bindLicense(result.id);
             }
 
             // Validated successfully
             localStorage.setItem("app-license-valid", "true");
+            localStorage.setItem("app-last-license-check", new Date().toISOString());
             localStorage.setItem("app-email", email);
             localStorage.setItem("app-license-key", licenseKey);
             onValidated();
@@ -110,22 +76,15 @@ export default function LicenseScreen({ onValidated, t }: LicenseScreenProps) {
         setLoading(true);
         setError("");
         try {
-            const deviceId = generateDeviceId();
-            const { error: updateError } = await supabase
-                .from("licenses")
-                .update({ device_id: deviceId })
-                .eq("id", unbindPrompt.id);
-
-            if (updateError) {
-                throw new Error("Error transferring license to this device.");
-            }
+            await bindLicense(unbindPrompt.id);
 
             localStorage.setItem("app-license-valid", "true");
+            localStorage.setItem("app-last-license-check", new Date().toISOString());
             localStorage.setItem("app-email", email);
             localStorage.setItem("app-license-key", licenseKey);
             onValidated();
         } catch (err: any) {
-            setError(err.message || "Failed to unbind from previous device.");
+            setError(err.message || "Failed to transfer license.");
         } finally {
             setLoading(false);
         }
@@ -149,7 +108,30 @@ export default function LicenseScreen({ onValidated, t }: LicenseScreenProps) {
                 </div>
             )}
 
-            {!unbindPrompt ? (
+            {unbindPrompt ? (
+                <div style={{ marginTop: '16px', textAlign: 'center' }}>
+                    <p style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '20px' }}>
+                        {t('license.in_use_msg')}
+                    </p>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <button
+                            className="wa-submit-btn"
+                            onClick={() => setUnbindPrompt(null)}
+                            style={{ flex: 1, background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
+                        >
+                            {t('common.cancel')}
+                        </button>
+                        <button
+                            className="wa-submit-btn"
+                            onClick={handleUnbind}
+                            disabled={loading}
+                            style={{ flex: 2, marginTop: '0px', opacity: loading ? 0.5 : 1 }}
+                        >
+                            {loading ? t('license.btn_transferring') : t('license.btn_transfer')}
+                        </button>
+                    </div>
+                </div>
+            ) : (
                 <>
                     <label className="wa-form-label" style={{ marginTop: '8px' }}>{t('license.label_email')}</label>
                     <input
@@ -211,29 +193,6 @@ export default function LicenseScreen({ onValidated, t }: LicenseScreenProps) {
                         </a>
                     </div>
                 </>
-            ) : (
-                <div style={{ marginTop: '16px', textAlign: 'center' }}>
-                    <p style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '20px' }}>
-                        {t('license.in_use_msg')}
-                    </p>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                        <button
-                            className="wa-submit-btn"
-                            onClick={() => setUnbindPrompt(null)}
-                            style={{ flex: 1, background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
-                        >
-                            {t('common.cancel')}
-                        </button>
-                        <button
-                            className="wa-submit-btn"
-                            onClick={handleUnbind}
-                            disabled={loading}
-                            style={{ flex: 2, marginTop: '0px', opacity: loading ? 0.5 : 1 }}
-                        >
-                            {loading ? t('license.btn_transferring') : t('license.btn_transfer')}
-                        </button>
-                    </div>
-                </div>
             )}
         </div>
     );

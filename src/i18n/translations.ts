@@ -233,6 +233,8 @@ export const translations = {
             buy_link: "Get a license",
             show_key: "Show license key",
             hide_key: "Hide license key",
+            error_invalid: "License not found or invalid email.",
+            toast_invalidated: "This license is no longer valid for this device.",
         },
         trial: {
             expires_in: "Trial expires in {hours} hours.",
@@ -291,6 +293,8 @@ export const translations = {
             buy_link: "Obtener una licencia",
             show_key: "Mostrar clave de licencia",
             hide_key: "Ocultar clave de licencia",
+            error_invalid: "Licencia no encontrada o correo inválido.",
+            toast_invalidated: "Esta licencia ya no es válida para este dispositivo.",
         },
         trial: {
             expires_in: "La prueba caduca en {hours} horas.",
