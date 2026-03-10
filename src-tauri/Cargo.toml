@@ -38,5 +38,6 @@ confy = "0.6.1"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = "2"
 
 
