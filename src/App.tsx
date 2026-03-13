@@ -290,6 +290,12 @@ function App() {
 
   const [showPermissionsCarousel, setShowPermissionsCarousel] = useState(false);
   const [carouselStep, setCarouselStep] = useState(0); // 0: Accessibility, 1: Contacts, 2: Screen
+  
+  // Prevent app from closing when clicking outside during permissions setup
+  useEffect(() => {
+    invoke('set_dialog_open', { open: showPermissionsCarousel }).catch(console.error);
+  }, [showPermissionsCarousel]);
+
   const checkAccessibility = async () => {
     try {
       const isEnabled = await invoke("check_accessibility");

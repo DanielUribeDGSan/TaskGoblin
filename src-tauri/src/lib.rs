@@ -353,10 +353,30 @@ fn request_screen_recording() -> Result<(), String> {
 fn check_contacts() -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
-        if let Ok(home) = std::env::var("HOME") {
-            let path = std::path::Path::new(&home).join("Library/Application Support/AddressBook");
-            return Ok(path.read_dir().is_ok());
+        use std::process::Command;
+        // CNContactStore.authorizationStatus doesn't prompt, it just returns the current status.
+        let swift_script = r#"
+            import Contacts
+            let status = CNContactStore.authorizationStatus(for: .contacts)
+            if status == .authorized {
+                print("AUTHORIZED")
+            } else {
+                print("DENIED")
+            }
+        "#;
+        
+        // Write to tmp to support older Mac toolchains
+        let script_path = "/tmp/task_goblin_check_contacts.swift";
+        let _ = std::fs::write(script_path, swift_script);
+        
+        let output = Command::new("swift").arg(script_path).output();
+        let _ = std::fs::remove_file(script_path);
+        
+        if let Ok(out) = output {
+            let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            return Ok(stdout == "AUTHORIZED");
         }
+        
         Ok(false)
     }
     #[cfg(not(target_os = "macos"))]
@@ -2766,8 +2786,8 @@ pub fn run() {
             // Use a real OS thread for Enigo (it is !Send on Windows, so async tasks fail)
             std::thread::spawn(move || {
                 let mut enigo_opt: Option<Enigo> = None;
-                let device_state = DeviceState::new();
-                let mut last_pos = device_state.get_mouse().coords;
+                let mut device_state_opt: Option<DeviceState> = None;
+                let mut last_pos = (0, 0);
                 let mut last_activity = Instant::now();
                 let mut wiggle_offset = 2; // Subtle movement
 
@@ -2781,31 +2801,40 @@ pub fn run() {
                     };
 
                     if moving {
-                        let current_pos = device_state.get_mouse().coords;
-                        let (cx, cy) = current_pos;
-                        let (lx, ly) = last_pos;
-                        
-                        // Ignore micro-jitter
-                        if (cx - lx).abs() > 2 || (cy - ly).abs() > 2 {
-                            last_pos = current_pos;
+                        if device_state_opt.is_none() {
+                            let ds = DeviceState::new();
+                            last_pos = ds.get_mouse().coords;
+                            device_state_opt = Some(ds);
                             last_activity = Instant::now();
-                            continue;
                         }
 
-                        // Only wiggle if the mouse has been idle for at least 3 seconds
-                        if last_activity.elapsed() >= Duration::from_secs(3) {
-                            if enigo_opt.is_none() {
-                                let _ = Enigo::new(&Settings::default()).map(|e| enigo_opt = Some(e));
+                        if let Some(ref device_state) = device_state_opt {
+                            let current_pos = device_state.get_mouse().coords;
+                            let (cx, cy) = current_pos;
+                            let (lx, ly) = last_pos;
+                            
+                            // Ignore micro-jitter
+                            if (cx - lx).abs() > 2 || (cy - ly).abs() > 2 {
+                                last_pos = current_pos;
+                                last_activity = Instant::now();
+                                continue;
                             }
 
-                            if let Some(ref mut enigo) = enigo_opt {
-                                // Wiggle: move and stay until next loop iteration
-                                let _ = enigo.move_mouse(wiggle_offset, wiggle_offset, enigo::Coordinate::Rel);
-                                wiggle_offset = -wiggle_offset;
-                                
-                                std::thread::sleep(Duration::from_millis(100));
-                                last_pos = device_state.get_mouse().coords;
-                                last_activity = Instant::now();
+                            // Only wiggle if the mouse has been idle for at least 3 seconds
+                            if last_activity.elapsed() >= Duration::from_secs(3) {
+                                if enigo_opt.is_none() {
+                                    let _ = Enigo::new(&Settings::default()).map(|e| enigo_opt = Some(e));
+                                }
+
+                                if let Some(ref mut enigo) = enigo_opt {
+                                    // Wiggle: move and stay until next loop iteration
+                                    let _ = enigo.move_mouse(wiggle_offset, wiggle_offset, enigo::Coordinate::Rel);
+                                    wiggle_offset = -wiggle_offset;
+                                    
+                                    std::thread::sleep(Duration::from_millis(100));
+                                    last_pos = device_state.get_mouse().coords;
+                                    last_activity = Instant::now();
+                                }
                             }
                         }
                     }
