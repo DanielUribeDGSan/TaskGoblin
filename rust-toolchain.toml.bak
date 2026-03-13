@@ -1,3 +1,0 @@
-[toolchain]
-# Use "stable" so macOS/Linux CI use their host toolchain; on Windows use default (MSVC if set).
-channel = "stable"

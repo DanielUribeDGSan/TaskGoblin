@@ -1807,7 +1807,8 @@ try {
         })?;
 
         let _ = app_handle.emit("ocr-end", ());
-        let ocr_island_label = "ocr-island";
+
+        // Show island "Copiando texto..." while OCR runs
         let (emit_status, res) = match ocr_res {
             Ok(out) => {
                 let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
@@ -2740,32 +2741,47 @@ pub fn run() {
             // Use a real OS thread for Enigo (it is !Send on Windows, so async tasks fail)
             std::thread::spawn(move || {
                 let mut enigo_opt: Option<Enigo> = None;
-                let mut offset: i32 = 1; // 1px diagonal is enough to keep awake without interrupting use
+                let device_state = DeviceState::new();
+                let mut last_pos = device_state.get_mouse().coords;
+                let mut last_activity = Instant::now();
+                let mut wiggle_offset = 2; // Subtle movement
+
                 loop {
-                    std::thread::sleep(Duration::from_millis(2000)); // 2 second interval is plenty keep-awake
+                    std::thread::sleep(Duration::from_millis(500));
                     let state = app_handle.state::<AppState>();
-                    let moving = if let Ok(lock) = state.mouse_moving.lock() {
-                        *lock
+                    let moving = if let Ok(guard) = state.mouse_moving.lock() {
+                        *guard
                     } else {
                         false
                     };
 
                     if moving {
-                        // Lazy init enigo only when we actually start moving
-                        if enigo_opt.is_none() {
-                            for _ in 0..5 {
-                                if let Ok(e) = Enigo::new(&Settings::default()) {
-                                    enigo_opt = Some(e);
-                                    break;
-                                }
-                                std::thread::sleep(Duration::from_secs(1));
-                            }
+                        let current_pos = device_state.get_mouse().coords;
+                        let (cx, cy) = current_pos;
+                        let (lx, ly) = last_pos;
+                        
+                        // Ignore micro-jitter
+                        if (cx - lx).abs() > 2 || (cy - ly).abs() > 2 {
+                            last_pos = current_pos;
+                            last_activity = Instant::now();
+                            continue;
                         }
 
-                        if let Some(ref mut enigo) = enigo_opt {
-                            // Diagonal movement is more robust, but just 1px
-                            let _ = enigo.move_mouse(offset, offset, enigo::Coordinate::Rel);
-                            offset = -offset;
+                        // Only wiggle if the mouse has been idle for at least 3 seconds
+                        if last_activity.elapsed() >= Duration::from_secs(3) {
+                            if enigo_opt.is_none() {
+                                let _ = Enigo::new(&Settings::default()).map(|e| enigo_opt = Some(e));
+                            }
+
+                            if let Some(ref mut enigo) = enigo_opt {
+                                // Wiggle: move and stay until next loop iteration
+                                let _ = enigo.move_mouse(wiggle_offset, wiggle_offset, enigo::Coordinate::Rel);
+                                wiggle_offset = -wiggle_offset;
+                                
+                                std::thread::sleep(Duration::from_millis(100));
+                                last_pos = device_state.get_mouse().coords;
+                                last_activity = Instant::now();
+                            }
                         }
                     }
                 }
@@ -2775,10 +2791,10 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app_handle, event| match event {
+        .run(|_app_handle, event| match event {
             #[cfg(target_os = "macos")]
             tauri::RunEvent::Reopen { .. } => {
-                if let Some(window) = app_handle.get_webview_window("main") {
+                if let Some(window) = _app_handle.get_webview_window("main") {
                     let _ = window.show();
                     let _ = window.set_focus();
                 }
