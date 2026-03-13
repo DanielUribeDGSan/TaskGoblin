@@ -59,6 +59,10 @@ export const translations = {
             toast_ensure_country: "Please ensure the number has a country code (e.g., +52)",
             info_title: "Information",
             info_desc: "You must have the WhatsApp application installed on this computer to open it automatically and send the message.",
+            info_desc_browser: "It will open the default browser with WhatsApp Web.",
+            label_method: "Send via",
+            method_app: "WhatsApp App",
+            method_browser: "Browser (WhatsApp Web)"
         },
         shutdown: {
             label_mins: "Shut down in (minutes):",
@@ -358,6 +362,10 @@ export const translations = {
             toast_ensure_country: "Asegúrate de que el número tenga el código de país (ej. +52)",
             info_title: "Información",
             info_desc: "Debes tener la aplicación de WhatsApp instalada en esta computadora para que pueda abrirse sola y enviar el mensaje.",
+            info_desc_browser: "Se abrirá el navegador principal con WhatsApp Web.",
+            label_method: "Enviar mediante",
+            method_app: "App de WhatsApp",
+            method_browser: "Navegador (WhatsApp Web)"
         },
         shutdown: {
             label_mins: "Apagar en (minutos):",

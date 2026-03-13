@@ -57,6 +57,7 @@ async fn schedule_whatsapp(
     phone: String,
     message: String,
     delay_secs: u64,
+    method: String,
 ) -> Result<(), String> {
     #[cfg(not(target_os = "windows"))]
     let _ = app_handle;
@@ -68,34 +69,57 @@ async fn schedule_whatsapp(
         .collect::<String>();
 
     println!(
-        "Scheduled WhatsApp to {} in {} seconds",
-        sanitized_phone, delay_secs
+        "Scheduled WhatsApp to {} in {} seconds via {}",
+        sanitized_phone, delay_secs, method
     );
 
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs)).await;
 
-        let url = format!(
-            "whatsapp://send?phone={}&text={}",
-            sanitized_phone,
-            urlencoding::encode(&message)
-        );
+        let url = if method == "browser" {
+            format!(
+                "https://web.whatsapp.com/send?phone={}&text={}",
+                sanitized_phone,
+                urlencoding::encode(&message)
+            )
+        } else {
+            format!(
+                "whatsapp://send?phone={}&text={}",
+                sanitized_phone,
+                urlencoding::encode(&message)
+            )
+        };
 
         #[cfg(target_os = "macos")]
         {
             let _ = std::process::Command::new("open").arg(&url).spawn();
-            tokio::time::sleep(tokio::time::Duration::from_secs(4)).await;
-            let script = r#"
-                tell application "WhatsApp" to activate
-                delay 0.5
-                tell application "System Events"
-                    keystroke return
-                end tell
-            "#;
-            let _ = std::process::Command::new("osascript")
-                .arg("-e")
-                .arg(script)
-                .output();
+            
+            if method == "browser" {
+                // Wait longer for WhatsApp Web to load
+                tokio::time::sleep(tokio::time::Duration::from_secs(12)).await;
+                let script = r#"
+                    tell application "System Events"
+                        keystroke return
+                    end tell
+                "#;
+                let _ = std::process::Command::new("osascript")
+                    .arg("-e")
+                    .arg(script)
+                    .output();
+            } else {
+                tokio::time::sleep(tokio::time::Duration::from_secs(4)).await;
+                let script = r#"
+                    tell application "WhatsApp" to activate
+                    delay 0.5
+                    tell application "System Events"
+                        keystroke return
+                    end tell
+                "#;
+                let _ = std::process::Command::new("osascript")
+                    .arg("-e")
+                    .arg(script)
+                    .output();
+            }
         }
 
         #[cfg(target_os = "windows")]
@@ -114,8 +138,10 @@ async fn schedule_whatsapp(
             // Open URL via Tauri's robust opener which handles Windows correctly
             let _ = app_handle.opener().open_url(&url, None::<&str>);
 
-            // Auto-send logic for Windows: wait 8s for the app to load the chat, then hit Enter
-            tokio::time::sleep(tokio::time::Duration::from_secs(8)).await;
+            // Auto-send logic for Windows: Wait longer if browser, else 8s
+            let wait_time = if method == "browser" { 16 } else { 8 };
+            tokio::time::sleep(tokio::time::Duration::from_secs(wait_time)).await;
+            
             let _ = tauri::async_runtime::spawn_blocking(move || {
                 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
                 if let Ok(mut enigo) = Enigo::new(&Settings::default()) {

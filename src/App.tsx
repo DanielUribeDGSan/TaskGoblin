@@ -269,6 +269,7 @@ function App() {
   const [countryCode, setCountryCode] = useState("+52"); // Default México
   const [waMsg, setWaMsg] = useState("");
   const [waDateTime, setWaDateTime] = useState<Date | null>(new Date());
+  const [waMethod, setWaMethod] = useState<"app" | "browser">("app");
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: "", visible: false });
   const [isPetMode, setIsPetMode] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -795,7 +796,8 @@ function App() {
       await invoke("schedule_whatsapp", {
         phone: finalPhone,
         message: waMsg,
-        delaySecs: delaySecs
+        delaySecs: delaySecs,
+        method: waMethod
       }).then(() => {
         showToast(t('whatsapp.toast_scheduled').replace('{0}', scheduledDate.toLocaleString()));
         setWaPhone("");
@@ -1545,8 +1547,40 @@ function App() {
                       </div>
                       <div className="info-alert-content">
                         <h4>{t('whatsapp.info_title')}</h4>
-                        <p>{t('whatsapp.info_desc')}</p>
+                        <p>{waMethod === 'app' ? t('whatsapp.info_desc') : t('whatsapp.info_desc_browser')}</p>
                       </div>
+                    </div>
+
+                    <label className="wa-form-label" style={{ marginTop: '18px', marginBottom: '8px' }}>{t('whatsapp.label_method')}</label>
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                      <button
+                        onClick={() => setWaMethod('app')}
+                        style={{
+                          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          padding: '6px 6px',
+                          background: waMethod === 'app' ? '#8c7ae6' : 'var(--bg-secondary)',
+                          color: waMethod === 'app' ? '#fff' : 'var(--text-primary)',
+                          border: waMethod === 'app' ? '1px solid #8c7ae6' : '1px solid var(--border-color)',
+                          borderRadius: '8px', cursor: 'pointer', transition: 'all 0.3s ease',
+                          fontSize: '13px', fontWeight: 500, boxShadow: waMethod === 'app' ? '0 4px 12px rgba(140, 122, 230, 0.4)' : 'none'
+                        }}
+                      >
+                        {t('whatsapp.method_app')}
+                      </button>
+                      <button
+                        onClick={() => setWaMethod('browser')}
+                        style={{
+                          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          padding: '6px 6px',
+                          background: waMethod === 'browser' ? '#8c7ae6' : 'var(--bg-secondary)',
+                          color: waMethod === 'browser' ? '#fff' : 'var(--text-primary)',
+                          border: waMethod === 'browser' ? '1px solid #8c7ae6' : '1px solid var(--border-color)',
+                          borderRadius: '8px', cursor: 'pointer', transition: 'all 0.3s ease',
+                          fontSize: '13px', fontWeight: 500, boxShadow: waMethod === 'browser' ? '0 4px 12px rgba(140, 122, 230, 0.4)' : 'none'
+                        }}
+                      >
+                        {t('whatsapp.method_browser')}
+                      </button>
                     </div>
 
                     <ContactPicker
