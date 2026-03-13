@@ -1481,11 +1481,22 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
                     let request = VNRecognizeTextRequest { (request, error) in
                         guard let observations = request.results as? [VNRecognizedTextObservation] else { return }
                         let text = observations.compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
-                        print(text)
+                        if let encoded = text.data(using: .utf8)?.base64EncodedString() {
+                            print("BASE64:\(encoded)")
+                        } else {
+                            print(text)
+                        }
                     }
                     request.recognitionLevel = .accurate
                     request.usesLanguageCorrection = true
-                    request.recognitionLanguages = ["es-ES", "en-US"]
+                    
+                    let desiredLangs = ["es-ES", "en-US"]
+                    if let supportedLangs = try? VNRecognizeTextRequest.supportedRecognitionLanguages(for: .accurate, revision: request.revision) {
+                        let validLangs = desiredLangs.filter { supportedLangs.contains($0) }
+                        request.recognitionLanguages = validLangs.isEmpty ? supportedLangs : validLangs
+                    } else {
+                        request.recognitionLanguages = desiredLangs
+                    }
 
                     let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
                     do {
@@ -1495,12 +1506,20 @@ async fn extract_text_from_screen(window: tauri::WebviewWindow) -> Result<String
                         exit(1)
                     }
                 "#;
+                
+                // Write swift script to a temporary file instead of using -e (fixes error on M1 macs without swift-driver)
+                let swift_script_path = "/tmp/mouse_crazy_ocr_script.swift";
+                if let Err(e) = std::fs::write(swift_script_path, swift_script) {
+                    println!("Failed to write swift script: {}", e);
+                }
 
                 let ocr_res = tauri::async_runtime::spawn_blocking(move || {
-                    Command::new("swift").arg("-e").arg(swift_script).output()
+                    Command::new("swift").arg(swift_script_path).output()
                 })
                 .await
                 .map_err(|e| e.to_string())?;
+
+                let _ = std::fs::remove_file(swift_script_path);
 
                 // 3. Clean up the temp image
                 let _ = fs::remove_file(temp_image_path);
@@ -1889,9 +1908,13 @@ async fn write_to_clipboard(text: String) -> Result<(), String> {
             }
         "#;
 
+        let swift_script_path = "/tmp/mouse_crazy_clipboard_script.swift";
+        if let Err(e) = std::fs::write(swift_script_path, swift_script) {
+            println!("Failed to write clipboard swift script: {}", e);
+        }
+
         let mut child = Command::new("swift")
-            .arg("-e")
-            .arg(swift_script)
+            .arg(swift_script_path)
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
@@ -1907,6 +1930,8 @@ async fn write_to_clipboard(text: String) -> Result<(), String> {
         let output = child
             .wait_with_output()
             .map_err(|e| format!("Failed to wait for swift: {}", e))?;
+            
+        let _ = std::fs::remove_file(swift_script_path);
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
