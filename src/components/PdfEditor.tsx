@@ -323,13 +323,13 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
                 onMouseDown={() => invoke('start_window_drag')}
                 style={{
                     height: '32px',
-                    background: '#e0e0e0',
+                    background: '#000000',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: '11px',
-                    color: '#555',
-                    borderBottom: '1px solid #ccc',
+                    color: '#ffffff',
+                    borderBottom: '1px solid #333',
                     cursor: 'grab',
                     flexShrink: 0,
                     fontWeight: 500,
@@ -376,7 +376,7 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
 
             <div className="pdf-canvas-container">
                 <div className="pdf-canvas-wrapper" style={{ position: 'relative' }}>
-                    <canvas ref={canvasRef} style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                    <canvas ref={canvasRef} style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.5)', backgroundColor: '#ffffff' }} />
 
                     {/* Overlay Texts */}
                     {texts.map(tItem => (
@@ -623,8 +623,8 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
                             onTouchEnd={stopDrawing}
                         />
                         <div style={{ marginTop: '16px', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                            <button onClick={() => setIsDrawingSignature(false)}>{t("common.cancel")}</button>
-                            <button onClick={saveSignature} style={{ background: 'var(--accent-color)', color: 'white' }}>{t("pdf_tools.insert_signature")}</button>
+                            <button onClick={() => setIsDrawingSignature(false)} style={{ background: '#333', color: '#fff', border: '1px solid #555', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer' }}>{t("common.cancel")}</button>
+                            <button onClick={saveSignature} style={{ background: 'var(--accent-color)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer' }}>{t("pdf_tools.insert_signature")}</button>
                         </div>
                     </div>
                 </div>
@@ -634,7 +634,7 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
          .pdf-editor-overlay {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: #f0f0f0;
+            background: #121212;
             z-index: 100000;
             display: flex;
             flex-direction: column;
@@ -646,12 +646,12 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
          .pdf-editor-loading {
             margin: auto;
             font-size: 20px;
-            color: #333;
+            color: #fff;
          }
          .pdf-toolbar {
             height: 60px;
-            background: #fff;
-            border-bottom: 1px solid #ddd;
+            background: #000000;
+            border-bottom: 1px solid #333;
             display: flex;
             align-items: center;
             padding: 0 24px;
@@ -660,12 +660,13 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
          .pdf-tool-btn {
             padding: 8px 16px;
             border-radius: 6px;
-            border: 1px solid #ddd;
-            background: #f9f9f9;
+            border: 1px solid #444;
+            background: #222;
+            color: #fff;
             cursor: pointer;
          }
          .pdf-tool-btn.save {
-            background: #007bff;
+            background: var(--accent-color);
             color: white;
             border: none;
          }
@@ -673,12 +674,14 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
             display: flex;
             align-items: center;
             gap: 12px;
+            color: #fff;
          }
          .pdf-toolbar-center button {
             padding: 4px 8px;
             cursor: pointer;
-            border: 1px solid #ccc;
-            background: #fff;
+            border: 1px solid #444;
+            background: #222;
+            color: #fff;
             border-radius: 4px;
          }
          .pdf-canvas-container {
@@ -691,21 +694,22 @@ export default function PdfEditor({ onClose, showToast, t }: PdfEditorProps) {
          .signature-modal-overlay {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0,0,0,0.7);
             display: flex;
             align-items: center;
             justify-content: center;
             z-index: 100001;
          }
          .signature-modal {
-            background: #fff;
+            background: #1e1e1e;
             padding: 24px;
             border-radius: 12px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            color: white;
          }
          .signature-modal h3 {
              margin-top: 0;
-             color: #333;
+             color: #fff;
          }
       `}</style>
         </div>

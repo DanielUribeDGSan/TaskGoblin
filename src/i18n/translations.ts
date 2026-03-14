@@ -80,7 +80,7 @@ export const translations = {
             step_init: "Initializing...",
         },
         pdf_tools: {
-            edit_title: "Edit PDF",
+            edit_title: "Edit/Sign PDF",
             edit_btn: "Open PDF Editor",
             convert_title: "Convert PDF to Word",
             convert_btn: "Select PDF file",
@@ -383,7 +383,7 @@ export const translations = {
             step_init: "Iniciando...",
         },
         pdf_tools: {
-            edit_title: "Editar PDF",
+            edit_title: "Editar/firmar PDF",
             edit_btn: "Abrir Editor de PDF",
             convert_title: "Convertir PDF a Word",
             convert_btn: "Seleccionar archivo PDF",
